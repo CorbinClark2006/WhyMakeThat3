@@ -84,6 +84,64 @@ public sealed class ConvoyPlayModeTests
     }
 
     [UnityTest]
+    public IEnumerator DriverCanReachHoodFromCabinWithWalkingAndJumping()
+    {
+        game.gameObject.SetActive(false);
+        game = authoredGame;
+        game.gameObject.SetActive(true);
+        game.SetPaused(false);
+        foreach (PursuerVan enemy in game.Pursuers) enemy.enabled = false;
+        game.player.SetSpawn(ConvoyPrototype.DriverSpawn, Quaternion.identity);
+        yield return new WaitForSeconds(0.2f);
+        yield return WalkCabinRoute(new Vector2(0f, 2.5f), true);
+        yield return WalkCabinRoute(new Vector2(0f, 3.5f), true);
+        yield return WalkCabinRoute(new Vector2(-0.55f, 4.7f), true);
+        Assert.That(game.player.transform.localPosition.y,
+            Is.EqualTo(game.RepairFires.Spot(1).localPosition.y).Within(0.1f));
+    }
+
+    [UnityTest]
+    public IEnumerator ActualSpaceLandingsRepairCargoAndHoodFiresButWalkingAndFallingDoNot()
+    {
+        game.gameObject.SetActive(false);
+        game = authoredGame;
+        game.gameObject.SetActive(true);
+        game.SetPaused(false);
+        game.player.SetSpawn(new Vector3(-0.8f, 0.04f, -2f), Quaternion.identity);
+        foreach (PursuerVan enemy in game.Pursuers) enemy.enabled = false;
+        game.RegisterRam(1);
+        game.RegisterRam(-1);
+        yield return new WaitForSeconds(0.6f);
+        for (int index = 0; index < 2; index++)
+        {
+            Transform spot = game.RepairFires.Spot(index);
+            Vector3 feet = spot.localPosition - Vector3.up * 0.012f;
+            game.player.SetSpawn(feet, Quaternion.identity);
+            yield return new WaitForSeconds(0.2f);
+            AssertNoSolidPenetration(game.player.GetComponent<CharacterController>(), game);
+            int health = game.Health;
+            Assert.That(game.RepairFires.Mask & (1 << index), Is.Not.Zero);
+            Assert.That(game.Health, Is.EqualTo(health), "Standing on fire must not restore health.");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Space));
+            yield return new WaitForSeconds(0.15f);
+            Assert.That(game.player.transform.localPosition.y, Is.GreaterThan(feet.y + 0.2f));
+            InputState.Change(keyboard, new KeyboardState());
+            yield return new WaitForSeconds(0.75f);
+            Assert.That(game.Health, Is.EqualTo(health + 1), "Actual SPACE landing must repair fire " + index);
+            Assert.That(spot.gameObject.activeSelf, Is.False);
+        }
+        Assert.That(game.Health, Is.EqualTo(5));
+        Assert.That(game.RepairFires.Count, Is.Zero);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.FireStomp), Is.True);
+        game.RegisterRam(1);
+        Vector3 cargoFeet = game.RepairFires.Spot(0).localPosition - Vector3.up * 0.012f;
+        game.player.SetSpawn(cargoFeet + Vector3.up * 0.5f, Quaternion.identity);
+        yield return new WaitForSeconds(0.6f);
+        Assert.That(game.Health, Is.EqualTo(4), "Falling onto fire without pressing jump cannot repair.");
+        Assert.That(game.RepairFires.Count, Is.EqualTo(1));
+    }
+
+    [UnityTest]
     public IEnumerator ImportedAudioLoopsFollowDrivingAndSuccessfulActionsUseOnlyRequestedSounds()
     {
         AudioSource engine = game.transform.Find("Convoy engine").GetComponent<AudioSource>();

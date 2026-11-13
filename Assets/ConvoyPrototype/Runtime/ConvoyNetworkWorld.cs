@@ -6,7 +6,7 @@ namespace Convoy
 {
     public sealed class ConvoyNetworkWorld : NetworkBehaviour
     {
-        public enum Action { Interact = 1, Fire = 2, Drop = 3, Replay = 4, ReplayGunner = 5, ReplayDriver = 6, RoundReady = 7 }
+        public enum Action { Interact = 1, Fire = 2, Drop = 3, Replay = 4, ReplayGunner = 5, ReplayDriver = 6, RoundReady = 7, Jump = 8, Stomp = 9 }
         public enum ReplayState { Playing, ChoosingRole, Resetting }
         public const int EventCapacity = 32;
         [Networked] public PlayerRef Gunner { get; set; }
@@ -26,6 +26,7 @@ namespace Convoy
         [Networked, UnityNonSerialized] public PlayerRef ReplayChooser { get; set; }
         [Networked, UnityNonSerialized] public int Round { get; set; }
         [Networked, UnityNonSerialized] public int ReadyPlayers { get; set; }
+        [Networked, UnityNonSerialized] public int RepairFireMask { get; set; }
         public bool ExecutingCommand { get; private set; }
         private ConvoyMultiplayer session;
         private readonly HashSet<GameObject> tracked = new HashSet<GameObject>();
@@ -48,6 +49,7 @@ namespace Convoy
                 State = Game.CaptureWorld();
                 Accelerator = Game.accelerator.CaptureOnline();
                 Ammo = Game.ShotsAvailable;
+                RepairFireMask = Game.RepairFires.Mask;
                 hadAuthority = true;
             }
             else
@@ -67,6 +69,7 @@ namespace Convoy
                 Game.accelerator.ApplyOnline(Accelerator);
                 Game.roadRocks.ApplyProgress(RoadProgress);
                 Game.ApplyAmmoCount(Ammo);
+                Game.RepairFires.ApplyMask(RepairFireMask);
                 hadAuthority = true;
             }
             ReconcileDepartedPlayers();
@@ -127,6 +130,7 @@ namespace Convoy
             Accelerator = Game.accelerator.CaptureOnline();
             RoadProgress = Game.roadRocks.CaptureProgress();
             Ammo = Game.ShotsAvailable;
+            RepairFireMask = Game.RepairFires.Mask;
         }
 
         private void AssignRole(ConvoyNetworkInput input, PlayerRef source)
@@ -166,6 +170,7 @@ namespace Convoy
                 Game.ApplyAmmoCount(Ammo);
                 Game.accelerator.ApplyOnline(Accelerator);
                 Game.roadRocks.ApplyProgress(RoadProgress);
+                Game.RepairFires.ApplyMask(RepairFireMask);
             }
             session.PlayerForRole(1)?.ApplyRemotePlayer(GunnerPose, HasStateAuthority);
             session.PlayerForRole(2)?.ApplyRemotePlayer(DriverPose, HasStateAuthority);
@@ -281,7 +286,7 @@ namespace Convoy
 
         public void SendAction(Action action)
         {
-            bool replayAction = action >= Action.Replay;
+            bool replayAction = action >= Action.Replay && action <= Action.RoundReady;
             if (session.Input == null || (!replayAction && !session.MatchReady) ||
                 (replayAction && !session.RolesPresent))
             {
@@ -317,6 +322,7 @@ namespace Convoy
             if (role == 1) GunnerPose = pose;
             else DriverPose = pose;
             actor.ApplyRemotePlayer(pose, true);
+            Game.RepairFires.ObserveJump(actor, pose.Position);
             return true;
         }
 
@@ -324,7 +330,7 @@ namespace Convoy
 
         private void Execute(PlayerRef source, ConvoyCommand command)
         {
-            if (command.Action >= (int)Action.Replay)
+            if (command.Action >= (int)Action.Replay && command.Action <= (int)Action.RoundReady)
             {
                 ExecuteReplay(source, (Action)command.Action);
                 return;
@@ -357,6 +363,10 @@ namespace Convoy
                 {
                     if (!actor.TryInteract()) Message(source, "Move closer to the item or pedal; release the gun or wheel to interact.");
                 }
+                else if (command.Action == (int)Action.Jump)
+                    Game.RepairFires.BeginJump(actor, command.Pose.Position);
+                else if (command.Action == (int)Action.Stomp)
+                    Game.RepairFires.TryStomp(actor, command.Pose.Position);
                 else Message(source, "That action is not available to your role.");
             }
             finally { ExecutingCommand = false; }
@@ -410,6 +420,7 @@ namespace Convoy
             Accelerator = Game.accelerator.CaptureOnline();
             Ammo = Game.ShotsAvailable;
             RoadProgress = Game.roadRocks.CaptureProgress();
+            RepairFireMask = Game.RepairFires.Mask;
         }
 
         private void ReconcileDepartedPlayers()

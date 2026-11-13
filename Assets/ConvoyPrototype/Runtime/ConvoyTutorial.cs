@@ -10,7 +10,7 @@ namespace Convoy
         {
             None = 0, Walk = 1, Look = 2, Jump = 4, BatteryPickup = 8, BatteryLoad = 16,
             GunMount = 32, GunFire = 64, DriverMount = 128, Steer = 256,
-            RockPickup = 512, RockPlace = 1024
+            RockPickup = 512, RockPlace = 1024, FireStomp = 2048
         }
 
         public readonly struct Hint
@@ -169,6 +169,13 @@ namespace Convoy
                 return new Hint(Lesson.GunFire, "FIRE", game.ShotsAvailable > 0 ? "LMB" : "RMB",
                     game.ShotsAvailable > 0 ? "MOUSE AIM. LEFT CLICK FIRE." : "RELEASE RIGHT MOUSE.",
                     game.ShotsAvailable > 0 ? "2 HITS PER VAN." : "FETCH BATTERY.", null, 1, 2);
+            }
+            if (!Knows(Lesson.FireStomp) && game.RepairFires != null)
+            {
+                Transform fire = game.RepairFires.NearestFire(actor);
+                if (fire != null && Vector3.Distance(actor.transform.position, fire.position) < 0.8f)
+                    return new Hint(Lesson.FireStomp, "STOMP FIRE", "SPACE",
+                        "JUMP ON FLAME.", "+1 VAN HEALTH.", fire);
             }
             if (accelerator != null && !Knows(Lesson.RockPickup) && accelerator.CanPickUp(actor))
                 return new Hint(Lesson.RockPickup, "REPAIR", "E",

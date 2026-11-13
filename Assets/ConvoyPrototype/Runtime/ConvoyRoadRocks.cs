@@ -29,7 +29,7 @@ namespace Convoy
             if (started || !game.RoadHazardsEnabled)
                 return;
             started = true;
-            SpawnRock(0, SpawnDistance);
+            if (!game.IsHighway) SpawnRock(0, SpawnDistance);
         }
 
         public Transform SpawnRock(int lane, float z)
@@ -65,6 +65,7 @@ namespace Convoy
             renderer.sharedMaterial = game.natureMaterial;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+            renderer.enabled = !game.IsHighway;
             rock.gameObject.AddComponent<ConvoyNatureSprite>();
             Rocks.Add(rock);
             return rock;
@@ -74,6 +75,11 @@ namespace Convoy
         {
             if (!game.WorldAuthority || !started || !game.RoadHazardsEnabled || !game.SimulationRunning)
                 return;
+            if (game.IsHighway)
+            {
+                ClearForHighway();
+                return;
+            }
             float travel = game.CurrentSpeed * dt;
             Physics.SyncTransforms();
             Bounds vanBounds = game.vanHitbox.bounds;
@@ -121,6 +127,20 @@ namespace Convoy
             rock.SetActive(false);
             if (Application.isPlaying) Destroy(rock);
             else DestroyImmediate(rock);
+        }
+
+        public void ClearForHighway()
+        {
+            travelSinceSpawn = 0f;
+            // Replicated obstacle objects despawn through their authority-owned entity.
+            for (int i = Rocks.Count - 1; i >= 0; i--)
+                RemoveRock(i);
+        }
+
+        public void ApplyRoadVisibility()
+        {
+            foreach (Transform rock in Rocks)
+                rock.GetComponent<SpriteRenderer>().enabled = !game.IsHighway;
         }
 
         public Vector3 CaptureProgress() => new Vector3(travelSinceSpawn, spawnIndex, started ? 1f : 0f);

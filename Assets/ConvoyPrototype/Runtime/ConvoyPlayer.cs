@@ -59,6 +59,7 @@ namespace Convoy
         private Vector3 spawnPosition;
         private Quaternion spawnRotation;
         private float respawnFadeRemaining;
+        private bool repairJump;
 
         private void Awake()
         {
@@ -127,11 +128,24 @@ namespace Convoy
                     verticalVelocity = 4.2f;
                     jumpBuffer = groundGrace = 0f;
                     game.RecordLesson(this, ConvoyTutorial.Lesson.Jump);
+                    repairJump = true;
+                    if (game.Online) game.network.World.SendAction(ConvoyNetworkWorld.Action.Jump);
+                    else game.RepairFires.BeginJump(this);
                 }
                 verticalVelocity -= 12f * dt;
                 Vector3 walk = transform.localRotation * new Vector3(input.x, 0f, input.y);
                 Vector3 beforeMove = transform.position;
                 MoveWithCollisions((walk * moveSpeed + ImpactVelocity + Vector3.up * verticalVelocity) * dt);
+                if (repairJump)
+                {
+                    if (!game.Online) game.RepairFires.ObserveJump(this, transform.localPosition);
+                    if (verticalVelocity < 0f && controller.isGrounded)
+                    {
+                        repairJump = false;
+                        if (game.Online) game.network.World.SendAction(ConvoyNetworkWorld.Action.Stomp);
+                        else game.RepairFires.TryStomp(this);
+                    }
+                }
                 if (transform.localPosition.y < -0.5f)
                 {
                     BeginRespawn();
@@ -151,6 +165,7 @@ namespace Convoy
 
         private void BeginRespawn()
         {
+            repairJump = false;
             Dismount();
             ReleaseAmmo(false);
             if (CarryingRock)
@@ -309,6 +324,7 @@ namespace Convoy
             if (controller == null)
                 controller = GetComponent<CharacterController>();
             Mounted = true;
+            repairJump = false;
             if (avatar != null)
                 avatar.gameObject.SetActive(false);
             controller.enabled = false;
@@ -348,6 +364,7 @@ namespace Convoy
             if (controller == null)
                 controller = GetComponent<CharacterController>();
             Driving = true;
+            repairJump = false;
             game.RecordLesson(this, ConvoyTutorial.Lesson.DriverMount);
             controller.enabled = false;
             verticalVelocity = 0f;
@@ -383,6 +400,7 @@ namespace Convoy
             pitch = 18f;
             verticalVelocity = kickRoll = jumpBuffer = groundGrace = 0f;
             RespawnRemaining = respawnFadeRemaining = 0f;
+            repairJump = false;
             ImpactVelocity = Vector3.zero;
             Physics.SyncTransforms();
             controller.enabled = true;

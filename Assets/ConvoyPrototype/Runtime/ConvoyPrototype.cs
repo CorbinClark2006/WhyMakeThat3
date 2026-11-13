@@ -34,6 +34,11 @@ namespace Convoy
         public const float DifficultyInterval = 30f;
         public const int PursuerLimit = 8;
         public float SurvivalTime { get; private set; }
+        public bool IsHighway => ConvoyRoadCycle.HighwayAt(SurvivalTime);
+        public float RoadPhaseRemaining => ConvoyRoadCycle.RemainingAt(SurvivalTime);
+        private ConvoyRoadCycle roadCycle;
+        private ConvoyRepairFires repairFires;
+        public ConvoyRepairFires RepairFires => repairFires;
         public int DifficultyStage => Mathf.FloorToInt(SurvivalTime / DifficultyInterval);
         public float SpeedMultiplier => 1f + DifficultyStage * 0.1f;
         public float CruiseSpeed => roadSpeed * SpeedMultiplier;
@@ -163,6 +168,7 @@ namespace Convoy
             PrototypeGeometry.BuildAccelerator(this);
             PrototypeGeometry.BuildRoadRocks(this);
             PrototypeGeometry.ExtendRoad(this);
+            EnsureRoadAndRepairs();
             player.view.farClipPlane = ViewDistance;
             SetPaused(ChoosingRole);
             if (!Application.isFocused)
@@ -277,6 +283,24 @@ namespace Convoy
             SurvivalTime += dt;
             if (DifficultyStage != previousStage)
                 spawnTimer = Mathf.Min(spawnTimer, CurrentSpawnInterval);
+            roadCycle?.Apply();
+            if (IsHighway) roadRocks.ClearForHighway();
+        }
+
+        public void EnsureRoadAndRepairs()
+        {
+            if (roadCycle == null)
+            {
+                roadCycle = GetComponent<ConvoyRoadCycle>();
+                if (roadCycle == null) roadCycle = gameObject.AddComponent<ConvoyRoadCycle>();
+                roadCycle.Initialize(this);
+            }
+            if (repairFires == null)
+            {
+                repairFires = GetComponent<ConvoyRepairFires>();
+                if (repairFires == null) repairFires = gameObject.AddComponent<ConvoyRepairFires>();
+                repairFires.Initialize(this);
+            }
         }
 
         private void LateUpdate()
@@ -378,8 +402,10 @@ namespace Convoy
                 remaining -= step;
             }
             float t = DistanceTravelled / roadSpeed;
-            van.localPosition = new Vector3(SteeringOffset + rigOffset.x, 1.05f + Mathf.Sin(t * 9f) * 0.018f, 0f);
-            van.localRotation = Quaternion.Euler(Mathf.Sin(t * 4.3f) * 0.22f, 0f, roll + Mathf.Sin(t * 3f) * 0.3f);
+            float roughness = IsHighway ? 0.2f : 1f;
+            van.localPosition = new Vector3(SteeringOffset + rigOffset.x, 1.05f + Mathf.Sin(t * 9f) * 0.018f * roughness, 0f);
+            van.localRotation = Quaternion.Euler(Mathf.Sin(t * 4.3f) * 0.22f * roughness, 0f,
+                roll + Mathf.Sin(t * 3f) * 0.3f * roughness);
         }
 
         public void RegisterRam(int side)
@@ -388,6 +414,11 @@ namespace Convoy
                 return;
             side = side < 0 ? -1 : 1;
             RamCount++;
+            if (!IsDead)
+            {
+                EnsureRoadAndRepairs();
+                repairFires.AddDamageFire();
+            }
             accelerator.RegisterImpact();
             DamageFlash = 1f;
             healthDisplayAge = 0f;
@@ -719,6 +750,9 @@ namespace Convoy
             UI.Text(SurvivalClock, 44, 65, 4, ConvoyPixelUI.Paper);
             UI.Text("STAGE " + (DifficultyStage + 1), 224, 46, 2, ConvoyPixelUI.Gold);
             UI.Text(CurrentSpeed.ToString("0.0") + " M/S", 224, 76, 2, ConvoyPixelUI.Paper);
+            ConvoyPixelUI.Panel(new Rect(28, 142, 344, 44));
+            UI.Text(IsHighway ? "HIGHWAY" : "DIRT", 44, 156, 2, IsHighway ? ConvoyPixelUI.Paper : ConvoyPixelUI.Copper);
+            UI.Text(Mathf.CeilToInt(RoadPhaseRemaining).ToString("00") + " S", 286, 156, 2, ConvoyPixelUI.Gold);
             float stageProgress = (SurvivalTime % DifficultyInterval) / DifficultyInterval;
             ConvoyPixelUI.Fill(new Rect(44, 114, 312, 4), ConvoyPixelUI.Plum);
             ConvoyPixelUI.Fill(new Rect(44, 114, Mathf.Floor(stageProgress * 312 / 4) * 4, 4), ConvoyPixelUI.Gold);
@@ -813,6 +847,8 @@ namespace Convoy
         public void ResetRound(PlayerRole role, Vector3 gunnerSpawn, Quaternion gunnerRotation)
         {
             SetPaused(true);
+            repairFires?.ApplyMask(0);
+            repairFires?.ResetJumps();
             player.SetNetworkAmmo(null);
             otherPlayer?.SetNetworkAmmo(null);
             foreach (PursuerVan enemy in Pursuers)
@@ -880,6 +916,8 @@ namespace Convoy
             }
             DistanceTravelled = state.Distance;
             SurvivalTime = state.SurvivalTime;
+            roadCycle?.Apply();
+            roadRocks.ApplyRoadVisibility();
             SteeringOffset = state.Steering;
             Cooldown = state.Cooldown;
             HitMarker = state.HitMarker;
@@ -900,6 +938,13 @@ namespace Convoy
         }
 
         public Vector2 GunAim => new Vector2(gunYaw, gunPitch);
+        public bool RestoreHealth()
+        {
+            if (!WorldAuthority || !SimulationRunning || RamCount <= 0 || IsDead) return false;
+            RamCount--;
+            healthDisplayAge = 0f;
+            return true;
+        }
         public void SetGunAim(float yaw, float pitch)
         {
             gunYaw = Mathf.Clamp(yaw, -75f, 75f);

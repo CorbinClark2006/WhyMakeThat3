@@ -70,6 +70,82 @@ public sealed class ConvoyMechanicsTests
         Assert.Throws<System.ArgumentOutOfRangeException>(() => game.PlaySound((ConvoyPrototype.Sound)100));
     }
 
+    [TestCase(0f, false, 30f)]
+    [TestCase(29.99f, false, 0.01f)]
+    [TestCase(30f, true, 15f)]
+    [TestCase(44.99f, true, 0.01f)]
+    [TestCase(45f, false, 30f)]
+    [TestCase(75f, true, 15f)]
+    [TestCase(90f, false, 30f)]
+    public void RoadCycleSwitchesExactlyAtThirtyAndFortyFiveSeconds(float time, bool highway, float remaining)
+    {
+        Assert.That(ConvoyRoadCycle.HighwayAt(time), Is.EqualTo(highway));
+        Assert.That(ConvoyRoadCycle.RemainingAt(time), Is.EqualTo(remaining).Within(0.001f));
+    }
+
+    [Test]
+    public void HighwayClearsApproachingHazardsAndResumesDirtWithoutBurstWhileDifficultyContinues()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        game.EnsureRoadAndRepairs();
+        Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(1));
+        game.AdvanceDifficulty(30f);
+        Assert.That(game.IsHighway, Is.True);
+        Assert.That(game.roadRocks.Rocks.Count, Is.Zero);
+        Assert.That(game.DifficultyStage, Is.EqualTo(1));
+        Transform tile = game.road.GetChild(0);
+        Assert.That(tile.Find("Highway surface").gameObject.activeSelf, Is.True);
+        Assert.That(tile.Find("Dirt lane 1").gameObject.activeSelf, Is.False);
+        for (int i = 0; i < 150; i++) game.roadRocks.Step(0.1f);
+        Assert.That(game.roadRocks.Rocks.Count, Is.Zero);
+        game.AdvanceDifficulty(15f);
+        Assert.That(game.IsHighway, Is.False);
+        Assert.That(tile.Find("Highway surface").gameObject.activeSelf, Is.False);
+        Assert.That(tile.Find("Dirt lane 1").gameObject.activeSelf, Is.True);
+        game.roadRocks.Step(0.1f);
+        Assert.That(game.roadRocks.Rocks.Count, Is.Zero, "Highway must not bank a spawn burst.");
+        game.roadRocks.Step(game.roadRocks.CurrentSpawnSeconds);
+        Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void FiresUseActualCargoAndHoodSurfacesAndRepairOnlyOnceAfterARealJumpRise()
+    {
+        game.EnsureRoadAndRepairs();
+        game.RegisterRam(1);
+        game.RegisterRam(-1);
+        Assert.That(game.Health, Is.EqualTo(3));
+        Assert.That(game.RepairFires.Count, Is.EqualTo(2));
+        Transform cargo = game.RepairFires.Spot(0), hood = game.RepairFires.Spot(1);
+        Assert.That(cargo.localPosition.z, Is.LessThan(0f));
+        Assert.That(hood.localPosition.z, Is.GreaterThan(4f));
+        Assert.That(hood.localPosition.y, Is.GreaterThan(cargo.localPosition.y));
+        Vector3 feet = cargo.localPosition - Vector3.up * 0.012f;
+        game.player.SetSpawn(feet, Quaternion.identity);
+        Assert.That(game.RepairFires.TryStomp(game.player), Is.False, "Walking or teleporting onto fire cannot repair.");
+        Assert.That(game.RepairFires.BeginJump(game.player), Is.True);
+        game.RepairFires.ObserveJump(game.player, feet + Vector3.up * 0.05f);
+        Assert.That(game.RepairFires.TryStomp(game.player), Is.False, "Small step-up is not a jump.");
+        Assert.That(game.RepairFires.BeginJump(game.player), Is.True);
+        game.RepairFires.ObserveJump(game.player, feet + Vector3.up * 0.3f);
+        Assert.That(game.RepairFires.TryStomp(game.player), Is.True);
+        Assert.That(game.Health, Is.EqualTo(4));
+        Assert.That(game.RepairFires.Count, Is.EqualTo(1));
+        Assert.That(game.RepairFires.TryStomp(game.player), Is.False);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.FireStomp), Is.True);
+        Assert.That(cargo.gameObject.activeSelf, Is.False);
+        for (int i = 0; i < 4; i++) game.RegisterRam(1);
+        Assert.That(game.IsDead, Is.True);
+        Assert.That(game.RepairFires.Count, Is.EqualTo(4), "Fatal damage must not add a fifth repair.");
+        Assert.That(game.RepairFires.BeginJump(game.player), Is.False);
+        Assert.That(game.RestoreHealth(), Is.False, "Fire cannot resurrect the van.");
+        game.ResetRound(ConvoyPrototype.PlayerRole.Gunner, feet, Quaternion.identity);
+        Assert.That(game.RepairFires.Mask, Is.Zero);
+        Assert.That(game.Health, Is.EqualTo(5));
+        Assert.That(game.IsHighway, Is.False);
+    }
+
     [Test]
     public void ReplayResetClearsDamageSuppliesTimersMotionRespawnAndTutorialWithoutRebuildingScenery()
     {
@@ -379,8 +455,9 @@ public sealed class ConvoyMechanicsTests
     {
         game.showRoleSelection = true;
         game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
-        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
-        Assert.That(game.roadRocks.CurrentSpawnSeconds, Is.EqualTo(2f));
+        game.AdvanceDifficulty(ConvoyRoadCycle.CycleDuration);
+        Assert.That(game.IsHighway, Is.False);
+        Assert.That(game.roadRocks.CurrentSpawnSeconds, Is.EqualTo(7f / 4.75f).Within(0.001f));
         for (int index = 0; index < 2; index++)
         {
             game.roadRocks.ApplyProgress(new Vector3(game.roadRocks.CurrentSpacing - 1f, index, 1f));
@@ -419,6 +496,7 @@ public sealed class ConvoyMechanicsTests
         Object.DestroyImmediate(enemy.gameObject);
         game.showRoleSelection = true;
         game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        game.AdvanceDifficulty(ConvoyRoadCycle.HighwayDuration);
         game.van.localPosition += Vector3.right * 4.95f;
         game.roadRocks.Step(10000f);
         Assert.That(game.roadRocks.Rocks.Count, Is.Zero, "Do not replay hours of missed spawns after a hitch.");

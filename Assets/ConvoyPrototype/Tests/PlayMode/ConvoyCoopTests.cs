@@ -16,6 +16,87 @@ public sealed class ConvoyCoopTests
     private GameObject clone;
 
     [UnityTest]
+    [Explicit("Exercises shared road phases and both roles' repair commands over Photon.")]
+    public IEnumerator HighwayAndJumpRepairsStaySharedAcrossRolesReplayAndAuthorityTransfer()
+    {
+        yield return SceneManager.LoadSceneAsync("ConvoyPrototype");
+        yield return null;
+        ConvoyPrototype first = Object.FindAnyObjectByType<ConvoyPrototype>();
+        clone = Object.Instantiate(first.gameObject);
+        clone.transform.position = Vector3.right * 2000f;
+        ConvoyPrototype second = clone.GetComponent<ConvoyPrototype>();
+        first.player.enabled = second.player.enabled = false;
+        second.player.view.GetComponent<AudioListener>().enabled = false;
+        yield return null;
+        sessions.Add(first.network);
+        sessions.Add(second.network);
+        string room = Guid.NewGuid().ToString("N").Substring(0, 8);
+        first.network.Connect(room, true, ConvoyPrototype.PlayerRole.Gunner);
+        yield return Wait(() => first.network.World != null, "Create repair test room.");
+        second.network.Connect(room, false, ConvoyPrototype.PlayerRole.Driver);
+        yield return Wait(() => first.network.MatchReady && second.network.MatchReady, "Both roles join.");
+        ConvoyPrototype authority = first.WorldAuthority ? first : second;
+        foreach (PursuerVan enemy in authority.Pursuers) enemy.enabled = false;
+        authority.AdvanceDifficulty(30f - authority.SurvivalTime);
+        yield return Wait(() => first.IsHighway && second.IsHighway &&
+            first.roadRocks.Rocks.Count == 0 && second.roadRocks.Rocks.Count == 0,
+            "Highway clears authority hazards and replicated entities.");
+        Assert.That(first.Pursuers.Count, Is.GreaterThan(0), "Highway does not remove chasing vans.");
+        Assert.That(Mathf.Abs(first.SurvivalTime - second.SurvivalTime), Is.LessThan(1f));
+        authority.RegisterRam(1);
+        authority.RegisterRam(-1);
+        yield return Wait(() => first.Health == 3 && second.Health == 3 &&
+            first.RepairFires.Mask == 3 && second.RepairFires.Mask == 3, "Both damage fires replicate.");
+        first.network.Runner.SetMasterClient(second.network.Runner.LocalPlayer);
+        yield return Wait(() => second.WorldAuthority, "Move authority with both fires active.");
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(second.RepairFires.Mask, Is.EqualTo(3), "Fire state survives authority migration.");
+        Assert.That(second.Health, Is.EqualTo(3));
+        for (int index = 0; index < 2; index++)
+        {
+            ConvoyPrototype actorGame = index == 0 ? first : second;
+            Vector3 feet = actorGame.RepairFires.Spot(index).localPosition - Vector3.up * 0.012f;
+            actorGame.player.SetSpawn(feet, Quaternion.identity);
+            yield return new WaitForSeconds(0.2f);
+            actorGame.network.World.SendAction(ConvoyNetworkWorld.Action.Stomp);
+            yield return new WaitForSeconds(0.2f);
+            Assert.That(second.Health, Is.EqualTo(3 + index), "Standing cannot repair over network.");
+            actorGame.network.World.SendAction(ConvoyNetworkWorld.Action.Jump);
+            yield return new WaitForSeconds(0.2f);
+            actorGame.player.GetComponent<CharacterController>().enabled = false;
+            actorGame.player.transform.localPosition = feet + Vector3.up * 0.35f;
+            yield return new WaitForSeconds(0.2f);
+            actorGame.player.transform.localPosition = feet;
+            actorGame.network.World.SendAction(ConvoyNetworkWorld.Action.Stomp);
+            yield return Wait(() => first.Health == 4 + index && second.Health == 4 + index &&
+                first.RepairFires.Mask == second.RepairFires.Mask,
+                "Validated jump landing repairs exactly once for role " + actorGame.Role);
+            actorGame.network.World.SendAction(ConvoyNetworkWorld.Action.Stomp);
+            yield return new WaitForSeconds(0.15f);
+            Assert.That(second.Health, Is.EqualTo(4 + index), "Duplicate landing cannot heal twice.");
+            Assert.That(actorGame.Tutorial.Knows(ConvoyTutorial.Lesson.FireStomp), Is.True);
+        }
+        Assert.That(first.RepairFires.Mask | second.RepairFires.Mask, Is.Zero);
+        Assert.That(first.GetComponents<ConvoyRepairFires>().Length, Is.EqualTo(1));
+        Assert.That(second.GetComponents<ConvoyRepairFires>().Length, Is.EqualTo(1));
+        authority = second;
+        authority.AdvanceDifficulty(45f - authority.SurvivalTime);
+        yield return Wait(() => !first.IsHighway && !second.IsHighway &&
+            first.roadRocks.Rocks.Count > 0 && second.roadRocks.Rocks.Count > 0,
+            "Dirt obstacles resume on both peers.");
+        for (int i = 0; i < 5; i++) authority.RegisterRam(1);
+        yield return Wait(() => first.IsDead && second.IsDead, "Shared shutdown.");
+        first.network.World.SendAction(ConvoyNetworkWorld.Action.Replay);
+        yield return Wait(() => first.network.World.ReplayPhase == ConvoyNetworkWorld.ReplayState.ChoosingRole, "Choose replay role.");
+        first.network.World.SendAction(ConvoyNetworkWorld.Action.ReplayDriver);
+        yield return Wait(() => first.network.MatchReady && second.network.MatchReady && first.Health == 5 && second.Health == 5,
+            "Replay restores full health.");
+        Assert.That(first.RepairFires.Mask | second.RepairFires.Mask, Is.Zero);
+        Assert.That(first.IsHighway || second.IsHighway, Is.False);
+        Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.FireStomp), Is.False);
+    }
+
+    [UnityTest]
     [Explicit("Exercises real two-peer in-room replay and requires internet access.")]
     public IEnumerator ReplayKeepsRoomSwapsRolesResetsEverythingAndSurvivesAuthorityHandoff()
     {

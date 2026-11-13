@@ -78,7 +78,7 @@ must remain enabled for this App ID in the Photon dashboard.
 The build command selects the custom [Convoy WebGL template](Assets/WebGLTemplates/Convoy/index.html),
 including its matching pixel loading screen, progress indicator, and fullscreen
 control. Refresh both browsers after an update; replay uses application version
-`convoy-web-6` and cannot join rooms from an older cached build.
+`convoy-web-7` and cannot join rooms from an older cached build.
 The `main` branch holds the editable Unity project; the `gh-pages` branch holds
 the compiled site. Pushing source edits to `main` does not rebuild the website:
 rebuild WebGL and publish the contents of `Build/WebGL` to `gh-pages` to release
@@ -145,6 +145,36 @@ assigns them. Missing clips are reported as configuration errors, not replaced
 by generated audio. Clip references live in the dedicated
 [ConvoySoundBank](Assets/ConvoyPrototype/Resources/ConvoySoundBank.asset)
 resource, preserving the authored scene's serialization layout.
+
+### Dirt, highways, and fire repairs
+
+Each round repeats **30 seconds of dirt, then 15 seconds of highway**, using
+shared survival time. Dirt retains the three off-road tracks and escalating
+rocks/bushes. Highway switches to a continuous slate asphalt surface with pale
+lane dashes and shoulders, gentler suspension, and **no road obstacles**:
+existing hazards clear when the highway begins, and spawning resumes on dirt
+without saving up a burst. Chasing vans and difficulty progression continue.
+The driver can release right mouse to carry a battery or help with repairs
+during the break. A compact road label/countdown shows when the surface changes.
+
+Every nonfatal impact creates one small animated pixel fire, alternating
+available repair spots inside the cargo area and on the hood. **Jump and land
+on a flame to put it out and recover one van health point.** Walking through,
+standing on, falling without jumping, mounting, or respawning does not repair.
+Each fire can restore only its own damage point; repairs cannot revive a
+destroyed van or replace the accelerator-rock mechanic. Either player can
+stomp fires. Flame/scorch sprites use the supplied palette, point filtering,
+and shared cached frames without particles or dynamic lights. Their bases are
+placed on the actual authored van/cargo collision surfaces, not floating over
+them or buried underneath cargo boxes. The hood remains reachable using the
+existing jumping route across the center console and dashboard; no ladder or
+teleport is added.
+A first-use `SPACE` marker teaches the repair action and retires on success.
+
+The authority validates jump rise and landing contact; the durable fire mask
+and shared health replicate together and survive authority transfer. Replay
+clears fires/jump tracking and starts on dirt with full health. New network
+properties remain `UnityNonSerialized` to preserve authored scene defaults.
 
 ### First-game crew manual
 
@@ -250,11 +280,21 @@ For smooth scrolling, field props are baked into nine meshes per road tile (432 
 | Resume my controls / Escape online | Resume your online controls |
 | R after the main van shuts down locally | Restart the scene with full health |
 
-Player 2 driving practice and online co-op have sparse road-rock obstacles; local Player 1's chase does not. The first 2.2-meter-tall rock appears 140 meters ahead in the middle lane; another appears after each 300 meters of travel (about 13 seconds at normal speed), cycling lanes and leaving the other lanes open. Hold right-click at the wheel and steer with A/D to avoid them. Rocks scroll at the actual road speed and stop with the accelerator. Local practice freezes them during pause/respawn; online play does not. A swept ground footprint checks contact against the van damage hitbox, so fast frames cannot pass through an obstacle. Each rock damages the van exactly once, using the same health loss, impact feedback, suspension bump, and accelerator loosening as a pursuer ram. A hit removes that obstacle; avoided rocks disappear behind the van. Five total hits still shut the van down.
+Player 2 driving practice and online co-op have road obstacles during dirt phases;
+local Player 1's chase does not. The first 2.2-meter-tall rock appears 140 meters
+ahead in the middle lane. Subsequent hazards cycle lanes at the escalating
+road-pressure intervals described above, leaving other lanes open. Hold
+right-click at the wheel and steer with A/D to avoid them. Rocks scroll at the
+actual road speed and stop with the accelerator. Local practice freezes them
+during pause/respawn; online play does not. A swept ground footprint prevents
+fast frames from skipping contact. Each obstacle damages the van once and
+loosens the accelerator, then disappears; avoided hazards disappear behind the
+van. Highways clear all hazards for their full 15-second break. Five accumulated
+**unrepaired** hits shut down the van; stomping a fire recovers one health point.
 
 - The first 30 seconds of the chase start with one van 65 meters behind, allow at most two pursuers, and add another no sooner than every 16 seconds. Vans initially approach at 4.5 m/s, maintain a following gap, warn for 2.5 seconds before a slower 3 m/s ram, then retreat for six seconds before approaching again. Endless survival difficulty increases that pressure every 30 seconds.
 - A ram must contact the main van's damage hitbox. It removes one of five health indicators, briefly flashes the screen, rocks the suspension, and pushes an unmounted occupant away from the struck side: a left-side hit pushes right, and a right-side hit pushes left. The larger health display drops into the top center on each hit, stays visible for five seconds after the latest hit, then fades out over 0.6 seconds. It starts hidden. The damage flash also fades instead of persisting. Falling below van-local y = -0.5 through the floor opening shows **Respawn** and a three-second countdown over black, then restores the scene's initial player position and rotation and fades the view in over 0.6 seconds. Fall velocity and impact motion reset, carried ammo drops without loading, and the chase pauses during the countdown so the van cannot take unattended damage. Escape/focus pauses also pause the countdown. Respawning does not reset van health or cannon ammo.
-- The fifth ram shuts down the main van: scrolling, walking, spawning, enemy movement, and combat stop, the gun dismounts, and the view darkens. Press **R** to reload the scene and restore all five health indicators.
+- A ram that reduces health to zero shuts down the main van: scrolling, walking, spawning, enemy movement, and combat stop, the gun dismounts, and the view darkens. Fire repairs can recover damage before shutdown, not afterward. Press **R** to reload the local scene and restore all five health indicators; co-op uses **Play Again**.
 - The driver footwell has an accelerator and a decorative brake pedal (the brake has no gameplay behavior). A rock initially holds the accelerator down at normal road speed. Each ram shifts the rock toward the pedal edge; the third ram knocks it onto the nearby solid footwell floor and shows **! Rock off accelerator**. Road/scenery movement and distance travelled slow smoothly to a complete stop over **15 seconds**, but walking, interactions, and railgun combat remain available. Either selected role can approach with empty hands and a clear path, press **E** to carry the rock, then press **E** near the accelerator to seat it again. Normal speed returns over **five seconds**, the warning clears immediately, and the rock's three-hit looseness resets. Van health and railgun ammo do not reset. Steering scales with current speed and cannot slide a stopped van sideways. Pause and fall recovery freeze the speed transition; releasing a carried rock on pause, death, or respawn returns it to its recoverable footwell position. This is intentionally a bounded, animated prop rather than an unrestricted physics object that can become lost through the floor opening.
 - Each enemy survives one railgun hit and explodes on the second. A surviving hit produces a strong, smooth backward slide without body shake or an instant position jump, interrupts its attack run, and produces an impact flash, sparks, and impact sound. For eight seconds after the hit it approaches at 1.5 m/s instead of 4.5 m/s and cannot start another ram. Backward movement respects the gap to its follower. Light armor indicators turn dark after damage; the optic flashes a hit marker on a confirmed hit.
 - The cannon starts with four shots. A compact recessed counter on the gun itself shows the exact remaining count, including stacked reloads, only while using its aiming camera. Its screen sits in front of the housing to prevent surface flicker. There is no player-HUD ammo counter. Empty shots do not fire or start the cooldown. Every battery adds four shots with no magazine cap.
