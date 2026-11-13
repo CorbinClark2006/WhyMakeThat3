@@ -64,7 +64,7 @@ public static class PrototypeSceneBuilder
         RenderSettings.fogMode = FogMode.Linear;
         RenderSettings.fogStartDistance = 75f;
         RenderSettings.fogEndDistance = 175f;
-        RenderSettings.skybox = null;
+        ConvoyNightSetup.Configure(game);
         EditorSceneManager.SaveScene(scene, ScenePath);
         var scenes = new List<EditorBuildSettingsScene> { new EditorBuildSettingsScene(ScenePath, true) };
         foreach (EditorBuildSettingsScene existing in EditorBuildSettings.scenes)

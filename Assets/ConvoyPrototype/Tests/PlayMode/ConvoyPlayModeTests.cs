@@ -442,7 +442,8 @@ public sealed class ConvoyPlayModeTests
         Assert.That(game.accelerator.NeedsRock, Is.False);
         InputState.Change(keyboard, new KeyboardState());
         game.accelerator.Step(5f);
-        Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed));
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.CruiseSpeed * ConvoyAccelerator.EscapeSpeed).Within(0.001f));
+        Assert.That(game.accelerator.EscapeRemaining, Is.InRange(2.8f, 3f));
         float distance = game.DistanceTravelled;
         yield return new WaitForSeconds(0.1f);
         Assert.That(game.DistanceTravelled, Is.GreaterThan(distance));

@@ -29,6 +29,7 @@ namespace Convoy
         [Networked, UnityNonSerialized] public int RepairFireMask { get; set; }
         [Networked, UnityNonSerialized] public Vector4 RoadSurfaceHistory { get; set; }
         [Networked, UnityNonSerialized] public int RoadSurfaceSequence { get; set; }
+        [Networked, UnityNonSerialized] public float EscapeRemaining { get; set; }
         public bool ExecutingCommand { get; private set; }
         private ConvoyMultiplayer session;
         private readonly HashSet<GameObject> tracked = new HashSet<GameObject>();
@@ -50,6 +51,7 @@ namespace Convoy
             {
                 State = Game.CaptureWorld();
                 Accelerator = Game.accelerator.CaptureOnline();
+                EscapeRemaining = Game.accelerator.EscapeRemaining;
                 Ammo = Game.ShotsAvailable;
                 RepairFireMask = Game.RepairFires.Mask;
                 RoadSurfaceHistory = Game.RoadCycle.History;
@@ -71,6 +73,7 @@ namespace Convoy
             {
                 Game.RoadCycle.ApplyHistory(RoadSurfaceHistory, RoadSurfaceSequence);
                 Game.accelerator.ApplyOnline(Accelerator);
+                Game.accelerator.ApplyEscapeOnline(EscapeRemaining);
                 Game.ApplyWorld(State);
                 Game.roadRocks.ApplyProgress(RoadProgress);
                 Game.ApplyAmmoCount(Ammo);
@@ -133,6 +136,7 @@ namespace Convoy
             }
             State = Game.CaptureWorld();
             Accelerator = Game.accelerator.CaptureOnline();
+            EscapeRemaining = Game.accelerator.EscapeRemaining;
             RoadProgress = Game.roadRocks.CaptureProgress();
             Ammo = Game.ShotsAvailable;
             RepairFireMask = Game.RepairFires.Mask;
@@ -175,6 +179,7 @@ namespace Convoy
                 hadAuthority = false;
                 Game.RoadCycle.ApplyHistory(RoadSurfaceHistory, RoadSurfaceSequence);
                 Game.accelerator.ApplyOnline(Accelerator);
+                Game.accelerator.ApplyEscapeOnline(EscapeRemaining);
                 Game.ApplyWorld(State);
                 Game.ApplyAmmoCount(Ammo);
                 Game.roadRocks.ApplyProgress(RoadProgress);
@@ -426,6 +431,7 @@ namespace Convoy
             session.PrepareRound();
             State = Game.CaptureWorld();
             Accelerator = Game.accelerator.CaptureOnline();
+            EscapeRemaining = Game.accelerator.EscapeRemaining;
             Ammo = Game.ShotsAvailable;
             RoadProgress = Game.roadRocks.CaptureProgress();
             RepairFireMask = Game.RepairFires.Mask;

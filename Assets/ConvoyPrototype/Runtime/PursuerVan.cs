@@ -9,6 +9,7 @@ namespace Convoy
         public Transform[] wheels;
         public Renderer damageIndicator;
         public Transform visualRoot;
+        [System.NonSerialized] public Light headlights;
         public float KnockbackSpeed { get; private set; }
         public const float SlowDuration = 8f;
         public float SlowRemaining { get; private set; }
@@ -45,6 +46,14 @@ namespace Convoy
             timer += dt;
             SlowRemaining = Mathf.Max(0f, SlowRemaining - dt);
             Vector3 p = transform.localPosition;
+            if (game.accelerator.Escaping)
+            {
+                ramDelivered = false;
+                EnterState(ChaseState.Approaching);
+                p.x = Mathf.MoveTowards(p.x, Side * 4.8f, dt * 3f);
+                p.z -= (8f + Mathf.Max(0f, game.CurrentSpeed - game.CruiseSpeed)) * dt;
+            }
+            else
             switch (State)
             {
                 case ChaseState.Approaching:
@@ -93,12 +102,24 @@ namespace Convoy
             KnockbackSpeed = Mathf.MoveTowards(KnockbackSpeed, 0f, dt * 10f);
             p.y = 0.025f * Mathf.Sin(Time.time * 12f + Side);
             transform.localPosition = p;
+            UpdateHeadlights();
             if (wheels != null)
                 foreach (Transform wheel in wheels)
                     wheel.Rotate(Vector3.right, game.CurrentSpeed * dt * Mathf.Rad2Deg / 0.5f, Space.World);
             if (damageIndicator != null)
                 damageIndicator.sharedMaterial = State == ChaseState.Telegraphing && Mathf.Sin(timer * 15f) > 0f
                     ? game.orange : Hits == 0 ? game.cyan : game.orange;
+        }
+
+        private void UpdateHeadlights()
+        {
+            if (headlights == null) return;
+            bool nearest = transform.localPosition.z > -35f;
+            foreach (PursuerVan other in game.Pursuers)
+                if (other != this && !other.IsDestroyed && other.Side == Side &&
+                    other.transform.localPosition.z > transform.localPosition.z)
+                    nearest = false;
+            headlights.enabled = nearest;
         }
 
         private void EnterState(ChaseState state)
@@ -165,6 +186,7 @@ namespace Convoy
             ramDelivered = state.RamDelivered;
             transform.localPosition = immediate ? state.Position :
                 Vector3.Lerp(transform.localPosition, state.Position, Mathf.Clamp01(Time.deltaTime * 25f));
+            UpdateHeadlights();
             if (damageIndicator != null)
                 damageIndicator.sharedMaterial = Hits > 0 ? game.orange : game.cyan;
         }

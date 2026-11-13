@@ -10,7 +10,7 @@ public static class VanModelSetup
     public const string SourcePath = "Assets/Game Assets/in_van_assets/textures/Truck_v009.obj";
     public const string LegacySourcePath = "Assets/main_van/truckgreybox_v008.fbx";
     public const string PursuerSourcePath = "Assets/Game Assets/truckchaser_v001.fbx";
-    public const string PursuerMaterialPath = "Assets/ConvoyPrototype/Materials/Grass.mat";
+    public const string PursuerMaterialPath = "Assets/Game Assets/in_van_assets/textures/vann.mat";
     public const string PlayerPrefabPath = "Assets/ConvoyPrototype/PlayerVanV008.prefab";
     public const string PursuerPrefabPath = "Assets/ConvoyPrototype/PursuerVanV001.prefab";
 
@@ -28,7 +28,7 @@ public static class VanModelSetup
         GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(PursuerSourcePath);
         Material material = AssetDatabase.LoadAssetAtPath<Material>(PursuerMaterialPath);
         if (source == null || material == null)
-            throw new InvalidOperationException("Missing chaser model or Grass material.");
+            throw new InvalidOperationException("Missing chaser model or authored vann material.");
         GameObject root = new GameObject("Intact v001 pursuer van");
         try
         {

@@ -3,6 +3,7 @@ Shader "Convoy/Nature Billboard"
     Properties
     {
         _MainTex ("Sprite", 2D) = "white" {}
+        _NightTint ("Night tint", Color) = (1,1,1,1)
     }
     SubShader
     {
@@ -15,9 +16,13 @@ Shader "Convoy/Nature Billboard"
             HLSLPROGRAM
             #pragma vertex Vert
             #pragma fragment Frag
+            #pragma multi_compile_fog
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
+            CBUFFER_START(UnityPerMaterial)
+            half4 _NightTint;
+            CBUFFER_END
             struct Attributes
             {
                 float3 center : POSITION;
@@ -28,6 +33,7 @@ Shader "Convoy/Nature Billboard"
             {
                 float4 position : SV_POSITION;
                 float2 uv : TEXCOORD0;
+                half fog : TEXCOORD1;
             };
             Varyings Vert(Attributes input)
             {
@@ -39,12 +45,14 @@ Shader "Convoy/Nature Billboard"
                 float3 position = center + right * input.offset.x + float3(0, input.offset.y, 0);
                 output.position = TransformWorldToHClip(position);
                 output.uv = input.uv;
+                output.fog = ComputeFogFactor(output.position.z);
                 return output;
             }
             half4 Frag(Varyings input) : SV_Target
             {
                 half4 color = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, input.uv);
                 clip(color.a - 0.001);
+                color.rgb = MixFog(color.rgb * _NightTint.rgb, input.fog);
                 return color;
             }
             ENDHLSL

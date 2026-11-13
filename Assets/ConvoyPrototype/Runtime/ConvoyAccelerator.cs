@@ -6,7 +6,9 @@ namespace Convoy
     {
         public const int HitsToDislodge = 3;
         public const float StopDuration = 15f;
-        public const float RecoveryDuration = 5f;
+        public const float RecoveryDuration = 1f;
+        public const float EscapeDuration = 8f;
+        public const float EscapeSpeed = 1.65f;
         public static readonly Vector3 PedalPosition = new Vector3(-0.72f, 0.26f, 3.35f);
         public static readonly Vector3 FallenPosition = new Vector3(-0.72f, 0.275f, 2.95f);
         public ConvoyPrototype game;
@@ -16,6 +18,8 @@ namespace Convoy
         public bool IsCarried { get; private set; }
         public int Impacts { get; private set; }
         public float SpeedFraction { get; private set; } = 1f;
+        public float EscapeRemaining { get; private set; }
+        public bool Escaping => RockOnPedal && EscapeRemaining > 0f;
         public bool NeedsRock => !RockOnPedal;
 
         private float transitionStart = 1f, transitionElapsed, rockElapsed;
@@ -34,6 +38,7 @@ namespace Convoy
             if (Impacts >= HitsToDislodge)
             {
                 RockOnPedal = false;
+                EscapeRemaining = 0f;
                 transitionStart = SpeedFraction;
                 transitionElapsed = 0f;
             }
@@ -43,9 +48,20 @@ namespace Convoy
         {
             if (!game.WorldAuthority || !game.SimulationRunning)
                 return;
-            transitionElapsed += dt;
-            SpeedFraction = Mathf.Lerp(transitionStart, RockOnPedal ? 1f : 0f,
-                transitionElapsed / (RockOnPedal ? RecoveryDuration : StopDuration));
+            float boostedTime = Mathf.Min(dt, EscapeRemaining);
+            if (boostedTime > 0f)
+            {
+                AdvanceSpeed(boostedTime, EscapeSpeed, RecoveryDuration);
+                EscapeRemaining = Mathf.Max(0f, EscapeRemaining - boostedTime);
+                if (EscapeRemaining == 0f)
+                {
+                    transitionStart = SpeedFraction;
+                    transitionElapsed = 0f;
+                }
+            }
+            if (dt > boostedTime)
+                AdvanceSpeed(dt - boostedTime, RockOnPedal ? 1f : 0f,
+                    RockOnPedal ? RecoveryDuration : StopDuration);
             pedal.localRotation = Quaternion.Euler(RockOnPedal ? 0f : -18f, 0f, 0f);
             if (IsCarried)
                 return;
@@ -55,6 +71,17 @@ namespace Convoy
             if (!RockOnPedal)
                 rock.localPosition += Vector3.up * (Mathf.Sin(t * Mathf.PI) * 0.06f);
             rock.localRotation = Quaternion.Euler(0f, 20f, RockOnPedal ? Impacts * 9f : 25f);
+        }
+
+        private void AdvanceSpeed(float dt, float target, float duration)
+        {
+            transitionElapsed += dt;
+            SpeedFraction = Mathf.Lerp(transitionStart, target, transitionElapsed / duration);
+        }
+
+        public void ApplyEscapeOnline(float remaining)
+        {
+            EscapeRemaining = remaining;
         }
 
         public void InitializeRock()
@@ -94,6 +121,7 @@ namespace Convoy
             Impacts = 0;
             transitionStart = SpeedFraction;
             transitionElapsed = 0f;
+            EscapeRemaining = EscapeDuration;
             rock.SetParent(game.van, false);
             InitializeRock();
             rockElapsed = 0.45f;
@@ -121,6 +149,7 @@ namespace Convoy
             Impacts = 0;
             SpeedFraction = transitionStart = 1f;
             transitionElapsed = 0f;
+            EscapeRemaining = 0f;
             rockElapsed = 0.45f;
             rock.SetParent(game.van, false);
             InitializeRock();

@@ -48,6 +48,112 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
+    public void EscapePushesRammingEnemiesBackThenRestoresChaseWithoutLosingSpacing()
+    {
+        PursuerVan leader = game.SpawnPursuer(-1, -20f);
+        leader.Step(10f);
+        leader.Step(3f);
+        Assert.That(leader.State, Is.EqualTo(PursuerVan.ChaseState.Ramming));
+        PursuerVan follower = game.SpawnPursuer(-1, -30f);
+        ReplacePedalRock();
+        float initial = leader.transform.localPosition.z;
+        leader.Step(1f);
+        follower.Step(1f);
+        Assert.That(leader.transform.localPosition.z, Is.LessThan(initial));
+        Assert.That(leader.State, Is.EqualTo(PursuerVan.ChaseState.Approaching));
+        Assert.That(game.Health, Is.EqualTo(5), "The escape must interrupt a pending ram.");
+        game.accelerator.Step(7.99f);
+        Assert.That(game.accelerator.Escaping, Is.True);
+        initial = leader.transform.localPosition.z;
+        leader.Step(0.1f);
+        follower.Step(0.1f);
+        Assert.That(leader.transform.localPosition.z, Is.LessThan(initial));
+        Assert.That(leader.transform.localPosition.z - follower.transform.localPosition.z,
+            Is.GreaterThanOrEqualTo(PursuerVan.FollowingDistance));
+        game.accelerator.Step(0.02f);
+        Assert.That(game.accelerator.Escaping, Is.False);
+        initial = leader.transform.localPosition.z;
+        leader.Step(0.1f);
+        Assert.That(leader.transform.localPosition.z, Is.GreaterThan(initial));
+        PursuerVan newcomer = game.SpawnPursuer(1, -100f);
+        ReplacePedalRock();
+        newcomer.Step(0.1f);
+        Assert.That(newcomer.transform.localPosition.z, Is.LessThan(-100f),
+            "New spawns must also respect an active escape.");
+    }
+
+    [Test]
+    public void EscapeFreezesOnPauseTransfersOnlineAndClearsOnDislodgeAndReplay()
+    {
+        ReplacePedalRock();
+        game.accelerator.Step(0.5f);
+        float speed = game.CurrentSpeed;
+        game.SetPaused(true);
+        game.accelerator.Step(100f);
+        Assert.That(game.accelerator.EscapeRemaining, Is.EqualTo(7.5f));
+        Assert.That(game.CurrentSpeed, Is.EqualTo(speed));
+        game.SetPaused(false);
+        ConvoyAcceleratorState snapshot = game.accelerator.CaptureOnline();
+        float remaining = game.accelerator.EscapeRemaining;
+        game.accelerator.ResetForRound();
+        game.network = root.AddComponent<ConvoyMultiplayer>();
+        game.accelerator.ApplyOnline(snapshot);
+        game.accelerator.ApplyEscapeOnline(remaining);
+        game.accelerator.Step(0.5f);
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.CruiseSpeed * ConvoyAccelerator.EscapeSpeed).Within(0.001f));
+        for (int i = 0; i < 3; i++) game.accelerator.RegisterImpact();
+        Assert.That(game.accelerator.EscapeRemaining, Is.Zero);
+        game.accelerator.ResetForRound();
+        Assert.That(game.accelerator.EscapeRemaining, Is.Zero);
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.CruiseSpeed));
+        ReplacePedalRock();
+        game.accelerator.Step(20f);
+        Assert.That(game.accelerator.EscapeRemaining, Is.Zero);
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.CruiseSpeed), "A long frame must cross boost and settle boundaries.");
+    }
+
+    private void ReplacePedalRock()
+    {
+        for (int i = 0; i < 3; i++) game.accelerator.RegisterImpact();
+        game.accelerator.Step(15f);
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2.95f), Quaternion.identity);
+        Assert.That(game.player.TryInteract(), Is.True);
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 3.1f), Quaternion.identity);
+        Assert.That(game.player.TryInteract(), Is.True);
+    }
+
+    [Test]
+    public void NightAssetsUsePaletteFogAndNonCollidingHeadlampsWithOnlyLaneLeadersLit()
+    {
+        Material sky = Resources.Load<Material>("ConvoyNightSky");
+        Assert.That(sky, Is.Not.Null);
+        Assert.That(UnityEditor.ShaderUtil.ShaderHasError(sky.shader), Is.False);
+        Assert.That(ConvoyNight.FogColor, Is.EqualTo((Color)new Color32(69, 41, 63, 255)));
+        Assert.That(ConvoyNight.FogStart, Is.GreaterThan(50f), "Nearby enemies and hazards must remain clear.");
+        Material enemyMaterial = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
+            "Assets/Game Assets/in_van_assets/textures/vann.mat");
+        Assert.That(enemyMaterial.GetTexture("_BaseMap"), Is.SameAs(
+            UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(
+                "Assets/Game Assets/in_van_assets/textures/vanchaser_v001.png")));
+        PursuerVan leader = game.SpawnPursuer(-1, -10f);
+        PursuerVan follower = game.SpawnPursuer(-1, -30f);
+        PursuerVan distant = game.SpawnPursuer(1, -65f);
+        leader.Step(0f);
+        follower.Step(0f);
+        distant.Step(0f);
+        Assert.That(leader.headlights.enabled, Is.True);
+        Assert.That(follower.headlights.enabled, Is.False);
+        Assert.That(distant.headlights.enabled, Is.False);
+        Assert.That(leader.headlights.shadows, Is.EqualTo(LightShadows.None));
+        foreach (Transform child in leader.visualRoot)
+            if (child.name == "Enemy headlamp")
+            {
+                Assert.That(child.GetComponent<Collider>(), Is.Null);
+                Assert.That(child.GetComponent<Renderer>().sharedMaterial, Is.SameAs(Resources.Load<Material>("ConvoyLamp")));
+            }
+    }
+
+    [Test]
     public void SoundBankReferencesExactlyTheSixRequestedImportedClips()
     {
         var bank = Resources.Load<ConvoySoundBank>("ConvoySoundBank");
@@ -485,6 +591,8 @@ public sealed class ConvoyMechanicsTests
         game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 3.1f), Quaternion.identity);
         Assert.That(game.player.TryInteract(), Is.True);
         game.accelerator.Step(5f);
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.CruiseSpeed * ConvoyAccelerator.EscapeSpeed).Within(0.001f));
+        game.accelerator.Step(4f);
         Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed * 1.2f).Within(0.001f));
         for (int i = 0; i < 5; i++) game.RegisterRam(1);
         float elapsed = game.SurvivalTime;
@@ -785,7 +893,7 @@ public sealed class ConvoyMechanicsTests
 
     [TestCase(ConvoyPrototype.PlayerRole.Gunner)]
     [TestCase(ConvoyPrototype.PlayerRole.Driver)]
-    public void EitherRoleCanCarryAndReplaceRockAndRecoverSpeedInFiveSeconds(ConvoyPrototype.PlayerRole role)
+    public void EitherRoleCanCarryAndReplaceRockForAnEightSecondEscape(ConvoyPrototype.PlayerRole role)
     {
         game.showRoleSelection = true;
         game.SelectRole(role);
@@ -805,11 +913,15 @@ public sealed class ConvoyMechanicsTests
         Assert.That(accelerator.NeedsRock, Is.False);
         Assert.That(accelerator.Impacts, Is.Zero);
         Assert.That(game.CurrentSpeed, Is.Zero);
-        accelerator.Step(2.5f);
-        Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed * 0.5f).Within(0.001f));
-        accelerator.Step(2.49f);
-        Assert.That(game.CurrentSpeed, Is.LessThan(game.roadSpeed));
-        accelerator.Step(0.01f);
+        accelerator.Step(0.5f);
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed * ConvoyAccelerator.EscapeSpeed * 0.5f).Within(0.001f));
+        accelerator.Step(0.5f);
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed * ConvoyAccelerator.EscapeSpeed).Within(0.001f));
+        accelerator.Step(6.99f);
+        Assert.That(accelerator.Escaping, Is.True);
+        accelerator.Step(0.02f);
+        Assert.That(accelerator.Escaping, Is.False);
+        accelerator.Step(1f);
         Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed).Within(0.001f));
         Assert.That(game.Health, Is.EqualTo(2));
         Assert.That(game.ShotsAvailable, Is.EqualTo(ammo));
@@ -959,10 +1071,10 @@ public sealed class ConvoyMechanicsTests
             else
             {
                 Assert.That(actual[i].sharedMesh, Is.SameAs(original[i].sharedMesh));
-                Material grass = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
-                    "Assets/ConvoyPrototype/Materials/Grass.mat");
+                Material appearance = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
+                    "Assets/Game Assets/in_van_assets/textures/vann.mat");
                 foreach (Material assigned in actual[i].GetComponent<Renderer>().sharedMaterials)
-                    Assert.That(assigned, Is.SameAs(grass));
+                    Assert.That(assigned, Is.SameAs(appearance));
             }
         }
         if (solid)

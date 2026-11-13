@@ -16,6 +16,55 @@ public sealed class ConvoyCoopTests
     private GameObject clone;
 
     [UnityTest]
+    [Explicit("Exercises the eight-second pedal escape and authority migration over Photon.")]
+    public IEnumerator PedalEscapeReplicatesAndExpiresAfterAuthorityTransfer()
+    {
+        yield return SceneManager.LoadSceneAsync("ConvoyPrototype");
+        yield return null;
+        ConvoyPrototype first = Object.FindAnyObjectByType<ConvoyPrototype>();
+        clone = Object.Instantiate(first.gameObject);
+        clone.transform.position = Vector3.right * 2000f;
+        ConvoyPrototype second = clone.GetComponent<ConvoyPrototype>();
+        first.player.enabled = second.player.enabled = false;
+        second.player.view.GetComponent<AudioListener>().enabled = false;
+        yield return null;
+        sessions.Add(first.network);
+        sessions.Add(second.network);
+        string room = Guid.NewGuid().ToString("N").Substring(0, 8);
+        first.network.Connect(room, true, ConvoyPrototype.PlayerRole.Gunner);
+        yield return Wait(() => first.network.World != null, "Create pedal escape room.");
+        second.network.Connect(room, false, ConvoyPrototype.PlayerRole.Driver);
+        yield return Wait(() => first.network.MatchReady && second.network.MatchReady, "Both escape roles join.");
+        for (int i = 0; i < 3; i++) first.accelerator.RegisterImpact();
+        first.accelerator.Step(15f);
+        yield return Wait(() => second.accelerator.NeedsRock, "Dislodged rock replicates.");
+        second.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2.95f), Quaternion.identity);
+        second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        yield return Wait(() => second.player.CarryingRock, "Driver picks up shared pedal rock.");
+        second.player.SetSpawn(new Vector3(-0.9f, 0.214f, 3.1f), Quaternion.identity);
+        second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        yield return Wait(() => first.accelerator.Escaping && second.accelerator.Escaping, "Shared escape starts.");
+        yield return Wait(() => Mathf.Abs(second.CurrentSpeed - second.CruiseSpeed * ConvoyAccelerator.EscapeSpeed) < 0.001f,
+            "Fast acceleration is visible on both peers.");
+        float remaining = second.accelerator.EscapeRemaining;
+        float z = first.Pursuers[0].transform.localPosition.z;
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(first.Pursuers[0].transform.localPosition.z, Is.LessThan(z), "Enemy actually falls back during escape.");
+        first.network.Runner.SetMasterClient(second.network.Runner.LocalPlayer);
+        yield return Wait(() => second.WorldAuthority, "Transfer authority during escape.");
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(second.accelerator.Escaping, Is.True);
+        Assert.That(second.accelerator.EscapeRemaining, Is.InRange(remaining - 2f, remaining));
+        yield return Wait(() => !first.accelerator.Escaping && !second.accelerator.Escaping &&
+            Mathf.Abs(second.CurrentSpeed - second.CruiseSpeed) < 0.001f, "Escape expires and both peers settle to cruise.");
+        Assert.That(first.accelerator.EscapeRemaining, Is.Zero);
+            Assert.That(second.accelerator.EscapeRemaining, Is.Zero);
+        z = second.Pursuers[0].transform.localPosition.z;
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(second.Pursuers[0].transform.localPosition.z, Is.GreaterThan(z), "Chase resumes after the eight-second escape.");
+    }
+
+    [UnityTest]
     [Explicit("Exercises shared road phases and both roles' repair commands over Photon.")]
     public IEnumerator HighwayAndJumpRepairsStaySharedAcrossRolesReplayAndAuthorityTransfer()
     {
@@ -173,6 +222,7 @@ public sealed class ConvoyCoopTests
             Assert.That(first.SurvivalTime, Is.LessThan(2f));
             Assert.That(second.accelerator.RockOnPedal, Is.True);
             Assert.That(second.accelerator.Impacts, Is.Zero);
+                Assert.That(second.accelerator.EscapeRemaining, Is.Zero);
             Assert.That(second.CurrentSpeed, Is.EqualTo(23f));
             Assert.That(first.player.CarriedAmmo, Is.Null);
             Assert.That(first.player.CarryingRock, Is.False);
@@ -282,7 +332,11 @@ public sealed class ConvoyCoopTests
             "Confirmed repair steps must teach the remote player who performed them.");
         Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.RockPickup), Is.False);
         Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.RockPlace), Is.False);
-        first.accelerator.Step(5f);
+        first.accelerator.Step(1f);
+        yield return Wait(() => first.accelerator.Escaping && second.accelerator.Escaping &&
+            Mathf.Abs(second.CurrentSpeed - second.CruiseSpeed * ConvoyAccelerator.EscapeSpeed) < 0.001f,
+            "Both peers must receive the one-second acceleration and eight-second escape.");
+        first.accelerator.Step(first.accelerator.EscapeRemaining + ConvoyAccelerator.RecoveryDuration);
         yield return Wait(() => Mathf.Abs(second.CurrentSpeed - second.roadSpeed) < 0.001f,
             "Both worlds must recover normal speed.");
 

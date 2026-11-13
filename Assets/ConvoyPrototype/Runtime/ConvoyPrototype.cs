@@ -169,6 +169,7 @@ namespace Convoy
             PrototypeGeometry.BuildAccelerator(this);
             PrototypeGeometry.BuildRoadRocks(this);
             PrototypeGeometry.ExtendRoad(this);
+            ConvoyNight.Apply(this);
             EnsureRoadAndRepairs();
             player.view.farClipPlane = ViewDistance;
             SetPaused(ChoosingRole);

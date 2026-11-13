@@ -196,7 +196,7 @@ namespace Convoy
             Application.runInBackground = true;
             FusionAppSettings settings = PhotonAppSettings.Global.AppSettings.GetCopy();
             settings.FixedRegion = "us";
-            settings.AppVersion = "convoy-web-9";
+            settings.AppVersion = "convoy-web-10";
             settings.Protocol = Photon.Client.ConnectionProtocol.WebSocketSecure;
             settings.EnableProtocolFallback = false;
             NetworkProjectConfig config = NetworkProjectConfig.Deserialize(NetworkProjectConfig.Serialize(NetworkProjectConfig.Global));

@@ -352,7 +352,8 @@ namespace Convoy
             camera.nearClipPlane = 0.04f;
             camera.farClipPlane = ConvoyPrototype.ViewDistance;
             camera.clearFlags = CameraClearFlags.SolidColor;
-            camera.backgroundColor = new Color(0.65f, 0.65f, 0.65f);
+            camera.clearFlags = CameraClearFlags.Skybox;
+            camera.backgroundColor = ConvoyNight.FogColor;
             camera.allowHDR = true;
         }
 
@@ -421,6 +422,7 @@ namespace Convoy
             BoxCollider hull = root.gameObject.AddComponent<BoxCollider>();
             hull.center = bounds.center;
             hull.size = bounds.size;
+            ConvoyNight.AddPursuerLights(enemy, bounds);
             enemy.damageIndicator = Part("Armor status - light intact, dark damaged", root,
                 new Vector3(0f, bounds.max.y + 0.08f, 0.2f),
                 new Vector3(1.2f, 0.13f, 0.2f), g.cyan, false).GetComponent<Renderer>();
