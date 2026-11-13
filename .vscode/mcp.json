@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "unityMCP": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "git+https://github.com/CoplayDev/unity-mcp.git@main#subdirectory=Server",
+        "mcp-for-unity"
+      ]
+    }
+  }
+}
