@@ -65,6 +65,9 @@ namespace Convoy
         public const int ShotsPerPack = 4;
         public int ShotsAvailable { get; private set; } = ShotsPerPack;
         public Material metal, dark, dirt, grass, foliage, orange, cyan, glass, rubber;
+        [System.NonSerialized]
+        public AudioClip engineSound, windSound, fireSound, impactSound, pickupSound, loadSound;
+        public enum Sound { Fire = 1, Impact = 2, Pickup = 3, Load = 4 }
 
         public const float SegmentLength = 24f;
         public const int SegmentCount = 48;
@@ -112,8 +115,7 @@ namespace Convoy
         private float gunYaw, gunPitch;
         private float healthDisplayAge = 6f;
         private bool pausedForFocus;
-        private AudioSource audioSource;
-        private AudioClip shotSound, crashSound, explosionSound;
+        private AudioSource audioSource, engineAudio, windAudio;
         private SpriteRenderer chargeDigits;
         private Sprite chargeSprite;
         private Texture2D chargeTexture;
@@ -139,11 +141,24 @@ namespace Convoy
                 return;
             }
 
-            audioSource = gameObject.AddComponent<AudioSource>();
-            audioSource.spatialBlend = 0f;
-            shotSound = MakeSound("Rail discharge", 0.28f, 130f, 0.35f);
-            crashSound = MakeSound("Body impact", 0.3f, 65f, 0.65f);
-            explosionSound = MakeSound("Explosion", 0.6f, 45f, 0.8f);
+            var sounds = Resources.Load<ConvoySoundBank>("ConvoySoundBank");
+            if (sounds == null)
+            {
+                Debug.LogError("Missing Convoy sound bank. Restore Assets/ConvoyPrototype/Resources/ConvoySoundBank.asset.", this);
+                enabled = false;
+                return;
+            }
+            sounds.AssignTo(this);
+            if (engineSound == null || windSound == null || fireSound == null || impactSound == null ||
+                pickupSound == null || loadSound == null)
+            {
+                Debug.LogError("Convoy audio is incomplete. Run Tools > Convoy > Configure Browser Multiplayer.", this);
+                enabled = false;
+                return;
+            }
+            audioSource = CreateAudioSource("Convoy effects", null, 0.8f);
+            engineAudio = CreateAudioSource("Convoy engine", engineSound, 0.35f);
+            windAudio = CreateAudioSource("Convoy wind", windSound, 0.2f);
             PrototypeGeometry.BuildDriverStation(this);
             PrototypeGeometry.BuildAccelerator(this);
             PrototypeGeometry.BuildRoadRocks(this);
@@ -266,6 +281,7 @@ namespace Convoy
 
         private void LateUpdate()
         {
+            UpdateDrivingAudio();
             Tutorial.Tick(Time.unscaledDeltaTime);
             if (gunAmmoDisplay != null)
             {
@@ -293,6 +309,7 @@ namespace Convoy
         {
             pausedForFocus = false;
             Paused = paused;
+            if (paused) StopAudio();
             if (paused && player != null)
             {
                 player.Dismount();
@@ -320,6 +337,7 @@ namespace Convoy
 
         private void OnDisable()
         {
+            StopAudio();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }
@@ -329,9 +347,6 @@ namespace Convoy
             pixelUI?.Dispose();
             if (chargeSprite != null) Destroy(chargeSprite);
             if (chargeTexture != null) Destroy(chargeTexture);
-            if (shotSound != null) Destroy(shotSound);
-            if (crashSound != null) Destroy(crashSound);
-            if (explosionSound != null) Destroy(explosionSound);
         }
 
         public void ScrollRoad(float dt)
@@ -383,7 +398,7 @@ namespace Convoy
                 otherPlayer.AddImpact(Vector3.left * (side * 3.8f), -side * 9f);
             if (Online)
                 network.World.BroadcastImpact(side);
-            PlaySound(crashSound, 0.65f);
+            PlaySound(Sound.Impact);
             if (IsDead)
             {
                 player.Dismount();
@@ -395,7 +410,7 @@ namespace Convoy
                 }
                 SetPaused(false);
                 accelerator.ReleaseRock();
-                PlaySound(explosionSound, 0.5f);
+                StopDrivingAudio();
             }
         }
 
@@ -461,7 +476,7 @@ namespace Convoy
                 }
             }
             DrawBeam(muzzle.position, end);
-            PlaySound(shotSound, 0.6f);
+            PlaySound(Sound.Fire);
             if (Online)
                 network.World.BroadcastShot(end, HitMarker > 0f);
             return true;
@@ -481,7 +496,7 @@ namespace Convoy
             ShotsAvailable = checked(ShotsAvailable + ShotsPerPack);
             pack.Consume();
             RecordLesson(actor, ConvoyTutorial.Lesson.BatteryLoad);
-            PlaySound(shotSound, 0.2f);
+            PlayInteractionSound(Sound.Load);
             return true;
         }
 
@@ -527,7 +542,6 @@ namespace Convoy
                 effects.Add(new Transient { Object = spark, Remaining = Random.Range(0.15f, 0.4f),
                     Velocity = normal * 4f + Random.insideUnitSphere * 3f, Debris = true });
             }
-            PlaySound(crashSound, 0.3f);
         }
 
         public void OnEnemyDestroyed(PursuerVan enemy)
@@ -544,7 +558,6 @@ namespace Convoy
         public void ShowExplosion(Vector3 origin)
         {
             Vector3 localOrigin = transform.InverseTransformPoint(origin);
-            PlaySound(explosionSound, 0.7f);
             for (int i = 0; i < 16; i++)
             {
                 GameObject shard = PrototypeGeometry.Part("Explosion debris", transform,
@@ -594,27 +607,68 @@ namespace Convoy
             }
         }
 
-        private static AudioClip MakeSound(string clipName, float duration, float frequency, float noise)
+        private AudioSource CreateAudioSource(string name, AudioClip clip, float volume)
         {
-            const int sampleRate = 22050;
-            float[] samples = new float[Mathf.CeilToInt(sampleRate * duration)];
-            System.Random random = new System.Random(42);
-            for (int i = 0; i < samples.Length; i++)
+            Transform child = transform.Find(name);
+            if (child == null)
             {
-                float t = (float)i / sampleRate;
-                float envelope = Mathf.Pow(1f - t / duration, 2f);
-                samples[i] = (Mathf.Sin(t * frequency * (1f - t) * Mathf.PI * 2f) * (1f - noise)
-                    + ((float)random.NextDouble() * 2f - 1f) * noise) * envelope * 0.6f;
+                child = new GameObject(name).transform;
+                child.SetParent(transform, false);
             }
-            AudioClip clip = AudioClip.Create(clipName, samples.Length, 1, sampleRate, false);
-            clip.SetData(samples, 0);
-            return clip;
+            var source = child.GetComponent<AudioSource>();
+            if (source == null) source = child.gameObject.AddComponent<AudioSource>();
+            source.Stop();
+            source.playOnAwake = false;
+            source.spatialBlend = 0f;
+            source.clip = clip;
+            source.loop = clip != null;
+            source.volume = volume;
+            return source;
         }
 
-        private void PlaySound(AudioClip clip, float volume)
+        private void UpdateDrivingAudio()
         {
-            if (audioSource != null && clip != null)
-                audioSource.PlayOneShot(clip, volume);
+            if (!SimulationRunning || Paused || CurrentSpeed <= 0.05f)
+            {
+                StopDrivingAudio();
+                return;
+            }
+            if (engineAudio != null && !engineAudio.isPlaying) engineAudio.Play();
+            if (windAudio != null && !windAudio.isPlaying) windAudio.Play();
+        }
+
+        private void StopDrivingAudio()
+        {
+            if (engineAudio != null) engineAudio.Stop();
+            if (windAudio != null) windAudio.Stop();
+        }
+
+        private void StopAudio()
+        {
+            StopDrivingAudio();
+            if (audioSource != null) audioSource.Stop();
+        }
+
+        public void PlaySound(Sound sound)
+        {
+            AudioClip clip = sound switch
+            {
+                Sound.Fire => fireSound,
+                Sound.Impact => impactSound,
+                Sound.Pickup => pickupSound,
+                Sound.Load => loadSound,
+                _ => throw new System.ArgumentOutOfRangeException(nameof(sound))
+            };
+            if (audioSource != null && !Paused)
+                audioSource.PlayOneShot(clip);
+        }
+
+        public void PlayInteractionSound(Sound sound)
+        {
+            if (!WorldAuthority)
+                throw new System.InvalidOperationException("Only world authority can confirm interaction audio.");
+            PlaySound(sound);
+            if (Online) network.World.BroadcastSound(sound);
         }
 
         private void OnGUI()
@@ -626,20 +680,18 @@ namespace Convoy
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(Screen.width / 1280f, Screen.height / 720f, 1f));
             if (ChoosingRole)
             {
-                UI.Backdrop("CREW SELECTION");
-                UI.Center("KEEP THIS VAN ALIVE", new Rect(160, 130, 960, 64), 5, ConvoyPixelUI.Gold);
-                UI.Center("ONE TAKES THE WHEEL. ONE WATCHES YOUR BACK.", new Rect(160, 208, 960, 40));
+                UI.Backdrop();
+                UI.Center("CONVOY", new Rect(160, 130, 960, 64), 7, ConvoyPixelUI.Gold);
+                UI.Center("SOLO", new Rect(160, 218, 960, 40), 2, ConvoyPixelUI.Copper);
                 ConvoyPixelUI.Panel(new Rect(248, 284, 368, 232));
                 ConvoyPixelUI.Panel(new Rect(664, 284, 368, 232));
                 UI.VanBadge(384, 310, true);
                 UI.VanBadge(800, 310, false);
-                UI.Center("PLAYER 1 / REAR GUN", new Rect(264, 382, 336, 32), 2, ConvoyPixelUI.Gold);
-                UI.Center("PLAYER 2 / WHEEL", new Rect(680, 382, 336, 32), 2, ConvoyPixelUI.Gold);
-                if (UI.Button(new Rect(264, 428, 336, 68), "PLAY GUNNER", "SOLO CHASE PRACTICE"))
+                if (UI.Button(new Rect(264, 428, 336, 68), "GUNNER"))
                     SelectRole(PlayerRole.Gunner);
-                if (UI.Button(new Rect(680, 428, 336, 68), "PLAY DRIVER", "SOLO ROAD PRACTICE"))
+                if (UI.Button(new Rect(680, 428, 336, 68), "DRIVER"))
                     SelectRole(PlayerRole.Driver);
-                if (network != null && UI.Button(new Rect(392, 552, 496, 72), "PLAY TOGETHER", "PRIVATE BROWSER CO-OP ROOM"))
+                if (network != null && UI.Button(new Rect(392, 552, 496, 72), "CO-OP"))
                     network.ShowLobby = true;
                 GUI.color = previousColor;
                 GUI.matrix = previous;
@@ -647,13 +699,11 @@ namespace Convoy
             }
             if (!Online && (IsDead || Paused))
             {
-                UI.Backdrop(IsDead ? "RUN ENDED" : "PRACTICE PAUSED");
-                UI.Center(IsDead ? "END OF THE ROAD" : "CATCH YOUR BREATH",
+                UI.Backdrop();
+                UI.Center(IsDead ? "END OF THE ROAD" : "PAUSED",
                     new Rect(160, 162, 960, 64), 5, ConvoyPixelUI.Gold);
-                UI.Center(IsDead ? "SURVIVED " + SurvivalClock + " / VANS DOWN " + DestroyedVans :
-                    "ONLY LOCAL PRACTICE IS FROZEN.", new Rect(240, 270, 800, 40), 2);
-                if (UI.Button(new Rect(420, 370, 440, 72), IsDead ? "PLAY AGAIN" : "RESUME", IsDead ?
-                    "CHOOSE YOUR ROLE FOR A FRESH RUN" : "BACK TO THE VAN"))
+                if (IsDead) UI.Center(SurvivalClock + " / " + DestroyedVans + " VANS", new Rect(240, 270, 800, 40), 2);
+                if (UI.Button(new Rect(420, 370, 440, 72), IsDead ? "PLAY AGAIN" : "RESUME"))
                 {
                     if (IsDead) SceneManager.LoadSceneAsync(gameObject.scene.path);
                     else SetPaused(false);
@@ -673,12 +723,11 @@ namespace Convoy
             ConvoyPixelUI.Fill(new Rect(44, 114, 312, 4), ConvoyPixelUI.Plum);
             ConvoyPixelUI.Fill(new Rect(44, 114, Mathf.Floor(stageProgress * 312 / 4) * 4, 4), ConvoyPixelUI.Gold);
             ConvoyPixelUI.Fill(new Rect(0, 0, 1280, 720), ConvoyPixelUI.Rust, DamageFlash * 0.24f);
-            UI.Text(Role == PlayerRole.Driver ? "DRIVER / FRONT" : "GUNNER / REAR", 988, 688, 2, ConvoyPixelUI.Paper, 0.8f);
             if (HealthDisplayAlpha > 0f)
             {
                 float y = 28f + HealthDisplayOffset;
                 ConvoyPixelUI.Panel(new Rect(472, y, 336, 68), HealthDisplayAlpha);
-                UI.Text("VAN INTEGRITY", 488, y + 10, 2, ConvoyPixelUI.Paper, HealthDisplayAlpha);
+                UI.Text("VAN", 488, y + 10, 2, ConvoyPixelUI.Paper, HealthDisplayAlpha);
                 for (int i = 0; i < MaximumHealth; i++)
                 {
                     ConvoyPixelUI.Fill(new Rect(488 + i * 62, y + 38, 54, 16),
@@ -696,9 +745,9 @@ namespace Convoy
                 ConvoyPixelUI.Fill(new Rect(560, 405, 160, 4), ConvoyPixelUI.Plum);
                 ConvoyPixelUI.Fill(new Rect(560, 405, 160f * (1f - Cooldown / 0.8f), 4), ConvoyPixelUI.Gold);
                 ConvoyPixelUI.Panel(new Rect(994, 558, 254, 112));
-                UI.Text("RAIL CHARGES", 1010, 574, 2, ConvoyPixelUI.Copper);
+                UI.Text("AMMO", 1010, 574, 2, ConvoyPixelUI.Copper);
                 UI.Text(ShotsAvailable.ToString("00"), 1010, 600, 5, ConvoyPixelUI.Gold);
-                UI.Text(ShotsAvailable == 0 ? "RELOAD" : Cooldown > 0 ? "CHARGING" : "READY",
+                UI.Text(ShotsAvailable == 0 ? "RELOAD" : Cooldown > 0 ? "..." : "",
                     1114, 620, 2, ShotsAvailable == 0 || Cooldown > 0 ? ConvoyPixelUI.Copper : ConvoyPixelUI.Paper);
             }
             else if (!IsDead)
@@ -708,8 +757,7 @@ namespace Convoy
                 ConvoyPixelUI.Panel(new Rect(908, 28, 340, 92), 1f, true);
                 ConvoyPixelUI.Fill(new Rect(918, 38, 44, 70), ConvoyPixelUI.Rust);
                 UI.Text("!", 930, 54, 5, ConvoyPixelUI.Gold);
-                UI.Text("THROTTLE LOST", 976, 46, 2, ConvoyPixelUI.Gold);
-                UI.Text("ROCK OFF PEDAL", 976, 76, 2, ConvoyPixelUI.Paper);
+                UI.Text("ROCK OFF PEDAL", 976, 62, 2, ConvoyPixelUI.Gold);
             }
             Tutorial.Draw();
             if (player.RespawnFadeAlpha > 0f)
@@ -717,11 +765,9 @@ namespace Convoy
                 ConvoyPixelUI.Fill(new Rect(0, 0, 1280, 720), ConvoyPixelUI.Ink, player.RespawnFadeAlpha);
                 if (player.IsRespawning)
                 {
-                    UI.Center("BACK ON YOUR FEET", new Rect(240, 240, 800, 50), 4, ConvoyPixelUI.Gold);
+                    UI.Center("RESPAWN", new Rect(240, 240, 800, 50), 4, ConvoyPixelUI.Gold);
                     UI.Center(Mathf.CeilToInt(player.RespawnRemaining).ToString(),
                         new Rect(540, 328, 200, 100), 10, ConvoyPixelUI.Paper);
-                    UI.Center(Online ? "YOUR PARTNER KEEPS THE VAN MOVING." : "PRACTICE WAITS FOR YOU.",
-                        new Rect(200, 464, 880, 40), 2, ConvoyPixelUI.Copper);
                 }
             }
             GUI.color = previousColor;
@@ -864,7 +910,7 @@ namespace Convoy
         public void ShowRemoteShot(Vector3 end, bool hit)
         {
             DrawBeam(muzzle.position, end);
-            PlaySound(shotSound, 0.6f);
+            PlaySound(Sound.Fire);
             if (hit)
                 CreateHitEffect(end, Vector3.up);
         }

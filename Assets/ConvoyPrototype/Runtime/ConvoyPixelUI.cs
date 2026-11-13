@@ -131,16 +131,13 @@ namespace Convoy
             return edited;
         }
 
-        public void Backdrop(string section)
+        public void Backdrop()
         {
             Fill(new Rect(0, 0, 1280, 720), Ink, 0.96f);
             for (int y = 0; y < 720; y += 8) Fill(new Rect(0, y, 1280, 1), Plum, 0.45f);
             Fill(new Rect(32, 32, 1216, 2), Copper);
-            Text("CONVOY / SURVIVE TOGETHER", 40, 48, 2, Gold);
-            Text(section, 920, 48, 2, Copper);
             for (int i = 0; i < 22; i++)
                 Fill(new Rect(40 + i * 24, 674, 12, 4), i % 2 == 0 ? Gold : Rust);
-            Text("TWO CREW. ONE VAN. NO EASY ROAD.", 828, 674, 2, Copper);
         }
 
         public void VanBadge(float x, float y, bool gunner)

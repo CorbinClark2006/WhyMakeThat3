@@ -47,6 +47,12 @@ public sealed class ConvoyPlayModeTests
         game.cyan = savedGame.cyan;
         game.glass = savedGame.glass;
         game.rubber = savedGame.rubber;
+        game.engineSound = savedGame.engineSound;
+        game.windSound = savedGame.windSound;
+        game.fireSound = savedGame.fireSound;
+        game.impactSound = savedGame.impactSound;
+        game.pickupSound = savedGame.pickupSound;
+        game.loadSound = savedGame.loadSound;
         game.playerAvatarPrefab = savedGame.playerAvatarPrefab;
         game.player2AvatarPrefab = savedGame.player2AvatarPrefab;
         game.natureSprites = savedGame.natureSprites;
@@ -75,6 +81,72 @@ public sealed class ConvoyPlayModeTests
         yield return null;
         if (inputFixture != null)
             inputFixture.TearDown();
+    }
+
+    [UnityTest]
+    public IEnumerator ImportedAudioLoopsFollowDrivingAndSuccessfulActionsUseOnlyRequestedSounds()
+    {
+        AudioSource engine = game.transform.Find("Convoy engine").GetComponent<AudioSource>();
+        AudioSource wind = game.transform.Find("Convoy wind").GetComponent<AudioSource>();
+        AudioSource effects = game.transform.Find("Convoy effects").GetComponent<AudioSource>();
+        Assert.That(engine.clip, Is.SameAs(game.engineSound));
+        Assert.That(wind.clip, Is.SameAs(game.windSound));
+        Assert.That(engine.clip.name, Is.EqualTo("van_running"));
+        Assert.That(wind.clip.name, Is.EqualTo("background_wind"));
+        Assert.That(game.fireSound.name, Is.EqualTo("crossbow_fire"));
+        Assert.That(game.impactSound.name, Is.EqualTo("van_hit"));
+        Assert.That(game.pickupSound.name, Is.EqualTo("pickup_soundeffect"));
+        Assert.That(game.loadSound.name, Is.EqualTo("insert_amo"));
+        Assert.That(engine.loop && wind.loop, Is.True);
+        Assert.That(effects.loop, Is.False);
+        yield return new WaitForSeconds(0.1f);
+        Assert.That(engine.isPlaying && wind.isPlaying, Is.True);
+        game.SetPaused(true);
+        Assert.That(engine.isPlaying || wind.isPlaying, Is.False);
+        game.SetPaused(false);
+        yield return null;
+        Assert.That(engine.isPlaying && wind.isPlaying, Is.True);
+        game.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        effects.Stop();
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(effects.isPlaying, Is.True, "Successful battery pickup plays its imported sound.");
+        effects.Stop();
+        Assert.That(game.player.TryInteract(), Is.False);
+        Assert.That(effects.isPlaying, Is.False, "Failed loading must not play a success sound.");
+        game.player.SetSpawn(new Vector3(-0.25f, 1f, -2f), Quaternion.identity);
+        yield return null;
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(effects.isPlaying, Is.True, "Successful loading plays the insert sound.");
+        effects.Stop();
+        Assert.That(game.player.Mount(), Is.True);
+        Assert.That(game.TryFire(), Is.True);
+        Assert.That(effects.isPlaying, Is.True);
+        effects.Stop();
+        Assert.That(game.TryFire(), Is.False);
+        Assert.That(effects.isPlaying, Is.False, "Cooldown rejects a shot without audio.");
+        game.player.Dismount();
+        for (int i = 0; i < 3; i++) game.RegisterRam(1);
+        Assert.That(effects.isPlaying, Is.True);
+        game.accelerator.Step(15f);
+        yield return null;
+        Assert.That(engine.isPlaying || wind.isPlaying, Is.False, "No driving loops after the rock stops the van.");
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2.95f), Quaternion.identity);
+        effects.Stop();
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(effects.isPlaying, Is.True, "Rock pickup uses the same pickup sound.");
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 3.1f), Quaternion.identity);
+        Assert.That(game.player.TryInteract(), Is.True);
+        game.accelerator.Step(5f);
+        yield return null;
+        Assert.That(engine.isPlaying && wind.isPlaying, Is.True);
+        game.ResetRound(ConvoyPrototype.PlayerRole.Gunner, new Vector3(0.9f, 0.82f, -1.35f), Quaternion.identity);
+        Assert.That(engine.isPlaying || wind.isPlaying, Is.False);
+        game.SetPaused(false);
+        yield return null;
+        Assert.That(game.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(3));
+        Assert.That(engine.isPlaying && wind.isPlaying, Is.True);
+        for (int i = 0; i < 5; i++) game.RegisterRam(1);
+        Assert.That(engine.isPlaying || wind.isPlaying, Is.False, "Van shutdown stops both loops immediately.");
     }
 
     [UnityTest]

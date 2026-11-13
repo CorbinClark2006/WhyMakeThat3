@@ -399,6 +399,7 @@ namespace Convoy
             nearest.PickUp(this);
             game.ReplenishAmmoSupply(nearest);
             game.RecordLesson(this, ConvoyTutorial.Lesson.BatteryPickup);
+            game.PlayInteractionSound(ConvoyPrototype.Sound.Pickup);
             return true;
         }
 

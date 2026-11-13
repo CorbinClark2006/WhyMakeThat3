@@ -192,11 +192,16 @@ namespace Convoy
                 else if (!HasStateAuthority)
                 {
                     if (message.Kind == 2)
+                    {
                         Game.player.AddImpact(Vector3.left * (message.Value * 3.8f), -message.Value * 9f);
+                        Game.PlaySound(ConvoyPrototype.Sound.Impact);
+                    }
                     else if (message.Kind == 3)
                         Game.ShowRemoteShot(Game.transform.TransformPoint(message.Position), message.Value != 0);
                     else if (message.Kind == 4)
                         Game.ShowExplosion(Game.transform.TransformPoint(message.Position));
+                    else if (message.Kind == 6)
+                        Game.PlaySound((ConvoyPrototype.Sound)message.Value);
                 }
             }
         }
@@ -220,6 +225,8 @@ namespace Convoy
             Emit(3, hit ? 1 : 0, Game.transform.InverseTransformPoint(end), PlayerRef.None);
         public void BroadcastExplosion(Vector3 position) =>
             Emit(4, 0, Game.transform.InverseTransformPoint(position), PlayerRef.None);
+        public void BroadcastSound(ConvoyPrototype.Sound sound) =>
+            Emit(6, (int)sound, Vector3.zero, PlayerRef.None);
         public void Remember(GameObject visual) => tracked.Add(visual);
         public void Untrack(GameObject visual) => tracked.Remove(visual);
 

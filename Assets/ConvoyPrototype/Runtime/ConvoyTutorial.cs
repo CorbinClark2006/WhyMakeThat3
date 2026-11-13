@@ -16,21 +16,20 @@ namespace Convoy
         public readonly struct Hint
         {
             public readonly Lesson Lesson;
-            public readonly string Title, Key, Line1, Line2, Line3;
+            public readonly string Title, Key, Line1, Line2;
             public readonly Transform Target;
             public readonly Vector3 TargetOffset;
             public Vector3 TargetPosition => Target.TransformPoint(TargetOffset);
             public readonly int Step, Steps;
 
             public Hint(Lesson lesson, string title, string key, string line1, string line2,
-                string line3, Transform target = null, int step = 0, int steps = 1, Vector3 targetOffset = default)
+                Transform target = null, int step = 0, int steps = 1, Vector3 targetOffset = default)
             {
                 Lesson = lesson;
                 Title = title;
                 Key = key;
                 Line1 = line1;
                 Line2 = line2;
-                Line3 = line3;
                 Target = target;
                 TargetOffset = targetOffset;
                 Step = step;
@@ -42,7 +41,6 @@ namespace Convoy
             Rust = ConvoyPixelUI.Rust, Copper = ConvoyPixelUI.Copper, Gold = ConvoyPixelUI.Gold, Paper = ConvoyPixelUI.Paper;
         private readonly ConvoyPrototype game;
         private float walked, looked, steered, previousSteering, refreshRemaining, hintAge, stampRemaining;
-        private string stamp = "";
         private bool reloadRouteStarted;
         public Lesson Learned { get; private set; }
         public Hint Current { get; private set; }
@@ -60,7 +58,6 @@ namespace Convoy
             walked = looked = steered = refreshRemaining = hintAge = stampRemaining = 0f;
             previousSteering = game.SteeringOffset;
             Current = default;
-            stamp = "";
             reloadRouteStarted = false;
         }
 
@@ -92,7 +89,6 @@ namespace Convoy
             if (Visible && (Current.Lesson & lesson) != 0 &&
                 (Current.Lesson != (Lesson.Walk | Lesson.Look) || Knows(Current.Lesson)))
             {
-                stamp = Current.Title;
                 stampRemaining = 1.4f;
             }
         }
@@ -137,82 +133,71 @@ namespace Convoy
             {
                 if (Knows(Lesson.RockPlace)) return default;
                 bool reachable = accelerator.CanPlace(actor);
-                return new Hint(Lesson.RockPlace, "KEEP THE ENGINE ALIVE", reachable ? "E" : "WASD",
-                    reachable ? "SEAT THE ROCK ON THE PEDAL." : "BRING THE ROCK TO THE PEDAL.",
-                    "THE VAN REGAINS ITS SPEED.",
-                    "REPAIR HELPS BOTH CREW MEMBERS.", accelerator.pedal, 1, 2);
+                return new Hint(Lesson.RockPlace, "REPAIR", reachable ? "E" : "WASD",
+                    reachable ? "PLACE ROCK." : "ROCK TO PEDAL.",
+                    "RESTORE SPEED.", accelerator.pedal, 1, 2);
             }
             if (actor.CarriedAmmo != null)
             {
                 if (Knows(Lesson.BatteryLoad)) return default;
                 bool reachable = game.CanLoadAmmo(actor.CarriedAmmo, actor);
-                return new Hint(Lesson.BatteryLoad, "FEED THE RAILGUN", reachable ? "E" : "WASD",
-                    reachable ? "INSERT THE BATTERY INTO THE GUN." : "CARRY THE BATTERY TO THE REAR.",
-                    "ONE BATTERY ADDS FOUR SHOTS.",
-                    "E AT THE RAILGUN LOADS THE BATTERY.", game.gun, 1, 2, ConvoyPrototype.GunLoadingPoint);
+                return new Hint(Lesson.BatteryLoad, "RELOAD", reachable ? "E" : "WASD",
+                    reachable ? "LOAD BATTERY." : "BATTERY TO RAILGUN.",
+                    "+4 SHOTS.", game.gun, 1, 2, ConvoyPrototype.GunLoadingPoint);
             }
             if (actor.Driving)
             {
                 if (Knows(Lesson.Steer)) return default;
-                return new Hint(Lesson.Steer, "THREAD THE ROAD", "A D",
-                    "HOLD RIGHT MOUSE + STEER LEFT/RIGHT.",
-                    "DODGE ROCKS AND BUSHES AHEAD.",
-                    "RELEASE RIGHT MOUSE TO STEP AWAY.", null, 1, 2);
+                return new Hint(Lesson.Steer, "STEER", "A D",
+                    "HOLD RIGHT MOUSE. DODGE.",
+                    "RELEASE TO WALK.", null, 1, 2);
             }
             if (reloadRouteStarted && !Knows(Lesson.BatteryLoad))
             {
                 ConvoyAmmoPack nearby = actor.FindReachableAmmo();
                 ConvoyAmmoPack pack = nearby ?? actor.FindAvailableAmmo();
                 bool reachable = !actor.Mounted && nearby != null;
-                return new Hint(Lesson.BatteryPickup, "EMPTY GUN? FOLLOW THE BATTERY",
+                return new Hint(Lesson.BatteryPickup, "EMPTY",
                     actor.Mounted ? "RMB" : reachable ? "E" : "WASD",
-                    actor.Mounted ? "RELEASE RIGHT MOUSE TO STEP AWAY." :
-                        reachable ? "PICK UP THIS AMMO BATTERY." : "FOLLOW THE MARKER TO THE BATTERY.",
-                    "THEN BRING IT BACK TO THE RAILGUN.",
-                    "E AT THE RAILGUN LOADS FOUR SHOTS.", pack != null ? pack.transform : game.ammoSupply, 0, 2);
+                    actor.Mounted ? "RELEASE RIGHT MOUSE." :
+                        reachable ? "PICK UP BATTERY." : "FOLLOW BATTERY MARKER.",
+                    "BATTERY TO RAILGUN.", pack != null ? pack.transform : game.ammoSupply, 0, 2);
             }
             if (actor.Mounted)
             {
                 if (Knows(Lesson.GunFire)) return default;
-                return new Hint(Lesson.GunFire, "MAKE TWO SHOTS COUNT", game.ShotsAvailable > 0 ? "LMB" : "RMB",
-                    game.ShotsAvailable > 0 ? "MOUSE TO AIM. LEFT MOUSE TO FIRE." : "EMPTY! RELEASE RIGHT MOUSE.",
-                    game.ShotsAvailable > 0 ? "TWO HITS TAKE DOWN A CHASING VAN." : "FETCH A BATTERY FOR FOUR SHOTS.",
-                    "RELEASE RIGHT MOUSE TO STEP AWAY.", null, 1, 2);
+                return new Hint(Lesson.GunFire, "FIRE", game.ShotsAvailable > 0 ? "LMB" : "RMB",
+                    game.ShotsAvailable > 0 ? "MOUSE AIM. LEFT CLICK FIRE." : "RELEASE RIGHT MOUSE.",
+                    game.ShotsAvailable > 0 ? "2 HITS PER VAN." : "FETCH BATTERY.", null, 1, 2);
             }
             if (accelerator != null && !Knows(Lesson.RockPickup) && accelerator.CanPickUp(actor))
-                return new Hint(Lesson.RockPickup, "THE ROCK IS YOUR THROTTLE", "E",
-                    "PICK UP THE FALLEN ROCK.",
-                    "BRING IT BACK TO THE ACCELERATOR.",
-                    "THE ENGINE SLOWS WITHOUT IT.", accelerator.rock, 0, 2);
+                return new Hint(Lesson.RockPickup, "REPAIR", "E",
+                    "PICK UP ROCK.",
+                    "ROCK TO PEDAL.", accelerator.rock, 0, 2);
             if (!Knows(Lesson.BatteryPickup))
             {
                 ConvoyAmmoPack pack = actor.FindReachableAmmo();
                 if (pack != null)
-                    return new Hint(Lesson.BatteryPickup, "POWER FOR THE REAR GUN", "E",
-                        "PICK UP THIS AMMO BATTERY.",
-                        "CARRY IT BACK TO THE RAILGUN.",
-                        "E AT THE GUN LOADS FOUR SHOTS.", pack.transform, 0, 2);
+                    return new Hint(Lesson.BatteryPickup, "AMMO", "E",
+                        "PICK UP BATTERY.",
+                        "BATTERY TO RAILGUN.", pack.transform, 0, 2);
             }
             if (actor.Role == ConvoyPrototype.PlayerRole.Driver && !Knows(Lesson.DriverMount) && actor.CanDrive)
-                return new Hint(Lesson.DriverMount, "TAKE THE WHEEL", "RMB",
-                    "HOLD RIGHT MOUSE AT THE WHEEL.",
-                    "YOU WILL SWITCH TO THE HOOD VIEW.",
-                    "KEEP HOLDING IT. A/D STEER.", game.van, 0, 2, ConvoyPrototype.DriverBoardingPoint);
+                return new Hint(Lesson.DriverMount, "DRIVE", "RMB",
+                    "HOLD RIGHT MOUSE.",
+                    "A/D STEER.", game.van, 0, 2, ConvoyPrototype.DriverBoardingPoint);
             if (actor.Role != ConvoyPrototype.PlayerRole.Driver && !Knows(Lesson.GunMount) && actor.CanMount)
-                return new Hint(Lesson.GunMount, "YOUR SEAT AT THE REAR", "RMB",
-                    "HOLD RIGHT MOUSE BY THE GUN.",
-                    "ENTER THE FIRST-PERSON GUN SIGHT.",
-                    "KEEP HOLDING IT. LEFT MOUSE FIRES.", game.gun, 0, 2);
+                return new Hint(Lesson.GunMount, "AIM", "RMB",
+                    "HOLD RIGHT MOUSE.",
+                    "LEFT CLICK FIRE.", game.gun, 0, 2);
             if (!Knows(Lesson.Walk | Lesson.Look))
-                return new Hint(Lesson.Walk | Lesson.Look, "FIND YOUR FEET", "WASD",
-                    "WASD MOVES YOU INSIDE THE VAN.",
-                    "MOVE THE MOUSE TO LOOK AROUND.",
-                    "NO MENU. LEARN WHILE YOU ROLL.");
+                return new Hint(Lesson.Walk | Lesson.Look, "MOVE", "WASD",
+                    "WASD WALK.",
+                    "MOUSE LOOK.");
             if (!Knows(Lesson.Jump))
-                return new Hint(Lesson.Jump, "A LITTLE HOP GOES A LONG WAY", "SPACE",
-                    "SPACE JUMPS ONTO STOOLS / LEDGES.",
-                    "WATCH THE OPENING IN THE FLOOR.",
-                    "A FALL RESPAWNS ONLY YOU.");
+                return new Hint(Lesson.Jump, "JUMP", "SPACE",
+                    "HOP ONTO LEDGES.",
+                    "WATCH THE FLOOR GAP.");
             return default;
         }
 
@@ -224,32 +209,28 @@ namespace Convoy
             {
                 float t = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(hintAge / 0.2f));
                 float y = 512f + Mathf.Round((1f - t) * 12f);
-                Panel(new Rect(32, y, 570, 176), t);
-                RectFill(new Rect(40, y + 8, 554, 30), Rust, t);
-                Text("CREW MANUAL / LEARN BY DOING", 52, y + 16, 2, Paper, t);
-                Text(Current.Title, 52, y + 52, 2, Gold, t);
-                Keycap(Current.Key, 52, y + 86, t);
-                Text(Current.Line1, 148, y + 88, 2, Paper, t);
-                Text(Current.Line2, 148, y + 112, 2, Paper, t);
-                Text(Current.Line3, 148, y + 140, 2, Gold, t);
+                Panel(new Rect(32, y, 470, 136), t);
+                Text(Current.Title, 52, y + 16, 2, Gold, t);
+                Keycap(Current.Key, 52, y + 48, t);
+                Text(Current.Line1, 148, y + 54, 2, Paper, t);
+                Text(Current.Line2, 148, y + 82, 2, Paper, t);
                 for (int i = 0; i < Current.Steps; i++)
                 {
                     Color color = i < Current.Step ? Paper : i == Current.Step ? Gold : Plum;
-                    RectFill(new Rect(554 + i * 16 - Current.Steps * 16, y + 17, 10, 10), color, t);
-                    if (i == Current.Step) RectFill(new Rect(554 + i * 16 - Current.Steps * 16, y + 29, 10, 2), Paper, t);
+                    RectFill(new Rect(474 + i * 16 - Current.Steps * 16, y + 17, 10, 10), color, t);
+                    if (i == Current.Step) RectFill(new Rect(474 + i * 16 - Current.Steps * 16, y + 29, 10, 2), Paper, t);
                 }
                 DrawTarget(t);
             }
             if (stampRemaining > 0f)
             {
                 float alpha = Mathf.Min(1f, stampRemaining / 0.3f);
-                Panel(new Rect(434, 32, 402, 72), alpha);
-                RectFill(new Rect(446, 48, 32, 32), Gold, alpha);
-                RectFill(new Rect(452, 63, 6, 6), Ink, alpha);
-                RectFill(new Rect(458, 69, 6, 6), Ink, alpha);
-                RectFill(new Rect(464, 57, 6, 12), Ink, alpha);
-                Text("LOGGED. YOU HAVE GOT THIS.", 494, 48, 2, Paper, alpha);
-                Text(stamp, 494, 73, 1, Gold, alpha);
+                Panel(new Rect(548, 32, 176, 72), alpha);
+                RectFill(new Rect(560, 48, 32, 32), Gold, alpha);
+                RectFill(new Rect(566, 63, 6, 6), Ink, alpha);
+                RectFill(new Rect(572, 69, 6, 6), Ink, alpha);
+                RectFill(new Rect(578, 57, 6, 12), Ink, alpha);
+                Text("GOT IT", 608, 58, 2, Paper, alpha);
             }
         }
 
@@ -289,7 +270,7 @@ namespace Convoy
 
         private static void DrawTargetLine(float x, float y, float size, float alpha)
         {
-            float elbow = Mathf.Min(x, 578);
+            float elbow = Mathf.Min(x, 478);
             for (float dash = y + size + 10; dash < 498; dash += 12)
                 RectFill(new Rect(x - 1, dash, 2, 5), Copper, alpha * 0.6f);
             RectFill(new Rect(elbow, 498, Mathf.Abs(x - elbow) + 2, 2), Copper, alpha * 0.6f);

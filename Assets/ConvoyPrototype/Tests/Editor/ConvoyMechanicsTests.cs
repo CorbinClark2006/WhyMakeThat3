@@ -48,6 +48,29 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
+    public void SoundBankReferencesExactlyTheSixRequestedImportedClips()
+    {
+        var bank = Resources.Load<ConvoySoundBank>("ConvoySoundBank");
+        Assert.That(bank, Is.Not.Null);
+        bank.AssignTo(game);
+        AudioClip[] clips = { game.engineSound, game.windSound, game.fireSound,
+            game.impactSound, game.pickupSound, game.loadSound };
+        string[] names = { "van_running.wav", "background_wind.mp3", "crossbow_fire.mp3",
+            "van_hit.mp3", "pickup_soundeffect.wav", "insert_amo.mp3" };
+        for (int i = 0; i < clips.Length; i++)
+        {
+            Assert.That(clips[i], Is.Not.Null);
+            Assert.That(UnityEditor.AssetDatabase.GetAssetPath(clips[i]),
+                Is.EqualTo("Assets/Game Assets/sound_effects/" + names[i]));
+            Assert.That(clips[i].length, Is.GreaterThan(0f));
+            var importer = (UnityEditor.AudioImporter)UnityEditor.AssetImporter.GetAtPath(
+                UnityEditor.AssetDatabase.GetAssetPath(clips[i]));
+            Assert.That(importer.defaultSampleSettings.preloadAudioData, Is.True);
+        }
+        Assert.Throws<System.ArgumentOutOfRangeException>(() => game.PlaySound((ConvoyPrototype.Sound)100));
+    }
+
+    [Test]
     public void ReplayResetClearsDamageSuppliesTimersMotionRespawnAndTutorialWithoutRebuildingScenery()
     {
         game.showRoleSelection = true;

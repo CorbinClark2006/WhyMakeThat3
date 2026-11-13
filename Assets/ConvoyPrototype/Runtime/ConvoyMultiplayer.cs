@@ -35,7 +35,7 @@ namespace Convoy
         public Quaternion gunnerRotation;
         public float SteeringInput;
         private string room = "";
-        private string status = "Create a room, then share its code with the other player.";
+        private string status = "Create a room or enter a code.";
         private bool connecting, matchActivated;
         private float messageUntil;
         private CancellationTokenSource cancellation;
@@ -106,7 +106,7 @@ namespace Convoy
             {
                 matchActivated = true;
                 ShowLobby = false;
-                status = "Room " + room + " - online. Escape opens the room menu.";
+                status = "ESC / MENU";
                 Game.SetPaused(false);
             }
 
@@ -115,7 +115,7 @@ namespace Convoy
                 matchActivated = false;
                 ShowLobby = true;
                 Game.SetPaused(true);
-                status = "Your partner disconnected. Waiting for a replacement in room " + room + ".";
+                status = "Partner disconnected. Waiting...";
             }
         }
 
@@ -196,7 +196,7 @@ namespace Convoy
             Application.runInBackground = true;
             FusionAppSettings settings = PhotonAppSettings.Global.AppSettings.GetCopy();
             settings.FixedRegion = "us";
-            settings.AppVersion = "convoy-web-5";
+            settings.AppVersion = "convoy-web-6";
             settings.Protocol = Photon.Client.ConnectionProtocol.WebSocketSecure;
             settings.EnableProtocolFallback = false;
             NetworkProjectConfig config = NetworkProjectConfig.Deserialize(NetworkProjectConfig.Serialize(NetworkProjectConfig.Global));
@@ -226,7 +226,7 @@ namespace Convoy
                 Report("Could not enter room: " + task.Result.ShutdownReason + ". Check the code or try a different room.");
             else
             {
-                status = "Room " + room + " - waiting for the other role.";
+                status = "Waiting for partner...";
                 if (Runner.IsSharedModeMasterClient)
                     Runner.Spawn(worldPrefab);
                 Runner.Spawn(inputPrefab, onBeforeSpawned: (runner, obj) =>
@@ -273,21 +273,20 @@ namespace Convoy
                 ConvoyPixelUI ui = Game.UI;
                 bool choosing = World != null && World.ReplayPhase == ConvoyNetworkWorld.ReplayState.ChoosingRole;
                 bool resetting = World != null && World.ReplayPhase == ConvoyNetworkWorld.ReplayState.Resetting;
-                ui.Backdrop(Game.IsDead || choosing || resetting ? "NEXT RUN" : "CREW CONNECTION");
-                ui.Center(choosing ? "CHOOSE YOUR ROLE" : resetting ? "CREW GETTING READY" :
-                    Game.IsDead ? "END OF THE ROAD" : Connected ? "YOUR CREW / YOUR ROOM" : "LINK UP. ROLL OUT.",
+                ui.Backdrop();
+                ui.Center(choosing ? "CHOOSE YOUR ROLE" : resetting ? "RESTARTING..." :
+                    Game.IsDead ? "END OF THE ROAD" : Connected ? "ROOM" : "CO-OP",
                     new Rect(160, 110, 960, 68), 5, ConvoyPixelUI.Gold);
                 ConvoyPixelUI.Panel(new Rect(264, 200, 752, 106));
-                if (Game.IsDead && !choosing)
+                if (Game.IsDead && !choosing && !resetting)
                 {
-                    ui.Text("RUN REPORT", 288, 218, 2, ConvoyPixelUI.Copper);
-                    ui.Text("SURVIVED " + Game.SurvivalClock, 288, 254, 3, ConvoyPixelUI.Paper);
-                    ui.Text("VANS DOWN " + Game.DestroyedVans, 660, 254, 3, ConvoyPixelUI.Gold);
+                    ui.Text(Game.SurvivalClock, 288, 246, 4, ConvoyPixelUI.Paper);
+                    ui.Text(Game.DestroyedVans + " VANS", 660, 254, 3, ConvoyPixelUI.Gold);
                 }
                 else ui.Paragraph(choosing ? World.ReplayChooser == Runner.LocalPlayer ?
-                    "Your pick. Your partner gets the other role. Both enter a fresh round together." :
-                    "Your partner is choosing. You get the other role automatically. Stay in this room." :
-                    resetting ? "Restoring the van, supplies, and both players. Waiting for both browsers before the road starts." :
+                    "Partner gets the other role." :
+                    "Partner choosing..." :
+                    resetting ? "Waiting for both players..." :
                     status, new Rect(288, 222, 704, 78), 2);
                 if (choosing)
                 {
@@ -295,39 +294,37 @@ namespace Convoy
                     {
                         ui.VanBadge(400, 330, true);
                         ui.VanBadge(800, 330, false);
-                        if (ui.Button(new Rect(272, 402, 352, 88), "TAKE THE GUN", "PARTNER WILL DRIVE"))
+                        if (ui.Button(new Rect(272, 402, 352, 88), "GUNNER"))
                             World.SendAction(ConvoyNetworkWorld.Action.ReplayGunner);
-                        if (ui.Button(new Rect(656, 402, 352, 88), "TAKE THE WHEEL", "PARTNER WILL SHOOT"))
+                        if (ui.Button(new Rect(656, 402, 352, 88), "DRIVER"))
                             World.SendAction(ConvoyNetworkWorld.Action.ReplayDriver);
                     }
                     else
                     {
-                        ui.Center("PARTNER IS CHOOSING...", new Rect(280, 356, 720, 68), 3, ConvoyPixelUI.Gold);
-                        ui.Center("NO NEW CODE. SAME CREW.", new Rect(280, 440, 720, 40), 2);
+                        ui.Center("WAITING...", new Rect(280, 356, 720, 68), 3, ConvoyPixelUI.Gold);
                     }
                 }
-                else if (Game.IsDead)
+                else if (Game.IsDead && !resetting)
                 {
                     bool enabled = GUI.enabled;
                     GUI.enabled = RolesPresent;
-                    if (ui.Button(new Rect(408, 366, 464, 84), "PLAY AGAIN", "FIRST CLICK GETS THE ROLE CHOICE"))
+                    if (ui.Button(new Rect(408, 366, 464, 84), "PLAY AGAIN"))
                         World.SendAction(ConvoyNetworkWorld.Action.Replay);
                     GUI.enabled = enabled;
-                    ui.Center(RolesPresent ? "SWAP JOBS. TRY AGAIN. STAY TOGETHER." :
-                        "WAITING FOR YOUR PARTNER TO REJOIN.", new Rect(232, 472, 816, 40), 2, ConvoyPixelUI.Copper);
+                    if (!RolesPresent) ui.Center("WAITING FOR PARTNER...", new Rect(232, 472, 816, 40), 2, ConvoyPixelUI.Copper);
                 }
                 else if (!resetting && !connecting && !Connected)
                 {
-                    if (ui.Button(new Rect(272, 332, 352, 72), "GUNNER", "PLAYER 1 / REAR GUN",
-                        RequestedRole == ConvoyPrototype.PlayerRole.Gunner))
+                    if (ui.Button(new Rect(272, 332, 352, 72), "GUNNER",
+                        selected: RequestedRole == ConvoyPrototype.PlayerRole.Gunner))
                         RequestedRole = ConvoyPrototype.PlayerRole.Gunner;
-                    if (ui.Button(new Rect(656, 332, 352, 72), "DRIVER", "PLAYER 2 / WHEEL",
-                        RequestedRole == ConvoyPrototype.PlayerRole.Driver))
+                    if (ui.Button(new Rect(656, 332, 352, 72), "DRIVER",
+                        selected: RequestedRole == ConvoyPrototype.PlayerRole.Driver))
                         RequestedRole = ConvoyPrototype.PlayerRole.Driver;
                     room = ui.RoomField(new Rect(392, 426, 496, 52), room);
-                    if (ui.Button(new Rect(272, 500, 352, 68), "CREATE ROOM", "GET A CODE TO SHARE"))
+                    if (ui.Button(new Rect(272, 500, 352, 68), "CREATE ROOM"))
                         Connect(Guid.NewGuid().ToString("N").Substring(0, 8), true, RequestedRole);
-                    if (ui.Button(new Rect(656, 500, 352, 68), "JOIN ROOM", "USE YOUR PARTNER'S CODE"))
+                    if (ui.Button(new Rect(656, 500, 352, 68), "JOIN ROOM"))
                         Connect(room, false, RequestedRole);
                 }
                 else if (!resetting && Connected && World != null && Game.player.OnlineRole == ConvoyPrototype.PlayerRole.None)
@@ -336,13 +333,13 @@ namespace Convoy
                     if (Input != null && ui.Button(new Rect(656, 352, 352, 72), "TAKE DRIVER")) Input.RequestRole(2);
                 }
                 else if (!resetting && !Game.IsDead && MatchReady && ui.Button(new Rect(408, 366, 464, 80),
-                    "RESUME MY CONTROLS", "YOUR PARTNER HAS NOT BEEN PAUSED"))
+                    "RESUME"))
                 {
                     ShowLobby = false;
                     Game.SetPaused(false);
                 }
-                if (Connected) ui.Center("ROOM CODE / " + room, new Rect(280, 536, 720, 36), 3, ConvoyPixelUI.Gold);
-                if (!connecting && ui.Button(new Rect(440, 604, 400, 44), Connected ? "LEAVE ROOM" : "BACK TO PRACTICE"))
+                if (Connected) ui.Center("CODE / " + room, new Rect(280, 536, 720, 36), 3, ConvoyPixelUI.Gold);
+                if (!connecting && ui.Button(new Rect(440, 604, 400, 44), Connected ? "LEAVE ROOM" : "BACK"))
                 {
                     if (Connected || Game.player.OnlineRole != ConvoyPrototype.PlayerRole.None)
                         StartCoroutine(ReturnToPractice());

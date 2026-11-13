@@ -30,7 +30,7 @@ Both players open **https://corbinclark2006.github.io/WhyMakeThat3/** on a
 desktop browser with keyboard and mouse. No Unity installation or port
 forwarding is needed to play.
 
-1. Choose **Play Together**.
+1. Choose **Co-op**.
 2. One player chooses **Driver** and clicks **Create Room**.
 3. Share the displayed room code. The other player chooses **Gunner**,
    enters that code, and clicks **Join Room**.
@@ -78,7 +78,7 @@ must remain enabled for this App ID in the Photon dashboard.
 The build command selects the custom [Convoy WebGL template](Assets/WebGLTemplates/Convoy/index.html),
 including its matching pixel loading screen, progress indicator, and fullscreen
 control. Refresh both browsers after an update; replay uses application version
-`convoy-web-5` and cannot join rooms from an older cached build.
+`convoy-web-6` and cannot join rooms from an older cached build.
 The `main` branch holds the editable Unity project; the `gh-pages` branch holds
 the compiled site. Pushing source edits to `main` does not rebuild the website:
 rebuild WebGL and publish the contents of `Build/WebGL` to `gh-pages` to release
@@ -110,6 +110,41 @@ panel borders. The palette is amber `#fbb954`, pale yellow `#f2ec8b`, rust
 Hover/selected/disabled states and warnings use the same design language.
 The shared UI caches bounded caption textures rather than generating them
 every frame.
+The startup page now contains only the title, **Solo**, **Gunner**, **Driver**,
+and **Co-op**. Menus omit slogans and button subtitles; HUD labels are compact,
+and tutorial cards use one short action plus one necessary follow-up. Essential
+room codes, connection errors, controls, replay choice, and repair warnings
+remain visible.
+
+### Sound effects
+
+Gameplay uses only the six assigned clips in [sound_effects](Assets/Game%20Assets/sound_effects):
+
+| Event | Clip |
+| --- | --- |
+| Van driving | `van_running.wav`, looped |
+| Moving air | `background_wind.mp3`, looped |
+| Successful gun shot | `crossbow_fire.mp3` |
+| Chaser/road-obstacle collision | `van_hit.mp3` |
+| Battery or accelerator-rock pickup | `pickup_soundeffect.wav` |
+| Successful ammo insertion | `insert_amo.mp3` |
+
+The synthesized shot/impact/explosion sounds are removed. No substitute
+explosion effect or background song is played. Engine and wind have separate,
+quiet 2D sources and stop during menus, local pause/focus release, van shutdown,
+or a stopped accelerator; repair and replay restart them without duplicate
+loops. Online respawn does not stop the moving world's loops. One-shot sounds
+play only on confirmed actions; failed pickups/reloads and cooldown clicks are
+silent. Both co-op peers hear the same confirmed shot, impact, pickup, and load,
+using the existing sequenced event ring without adding network properties.
+Paused clients mute their own audio without pausing their partner.
+
+**Configure Browser Multiplayer** and **Build Browser Co-op** assign/preload the
+six files without rebuilding scene geometry. The prototype scene builder also
+assigns them. Missing clips are reported as configuration errors, not replaced
+by generated audio. Clip references live in the dedicated
+[ConvoySoundBank](Assets/ConvoyPrototype/Resources/ConvoySoundBank.asset)
+resource, preserving the authored scene's serialization layout.
 
 ### First-game crew manual
 
@@ -129,7 +164,7 @@ active after the firing lesson retires, and disappears after your successful
 load; partner reloads and failed interactions do not dismiss it.
 
 Successfully performed steps retire for **that player during this game**, with
-a brief "logged" stamp. Unfinished lessons remain available after difficulty
+a brief "Got it" stamp. Unfinished lessons remain available after difficulty
 increases; there is no forced tutorial pause or easier simulation. Walking and
 looking require actual movement; failed interactions and someone else's ammo,
 shots, or repairs never complete your lessons. Shared interactions are confirmed
@@ -187,7 +222,7 @@ has no chasers.
 
 ### Local practice and controls
 
-On Play, choose **Play Gunner** for the existing local chase or **Play Driver** for driving practice. Driver practice has no chasing vans and starts on the driver's seat. Hold **right-click** within reach of the steering wheel to switch to a driving view above and behind the hood at van-local `(0, 2.4, 4.35)`, looking down eight degrees so the hood remains visible across the lower foreground; hold **A/D** to steer smoothly across the three-lane road. The 48 scrolling road tiles extend more than 900 meters ahead, with a 1,000-meter camera clipping distance. Existing authored tiles are preserved and extended rather than rebuilding the van or cargo. Releasing right-click immediately restores the third-person camera and WASD walking. Forward speed stays automatic, and lateral steering stops when the van reaches either road edge. Escape/focus pauses release the wheel. The main imported truck remains intact; a separate graybox steering wheel marks the interaction point.
+On Play, choose **Gunner** for the existing local chase or **Driver** for driving practice. Driver practice has no chasing vans and starts on the driver's seat. Hold **right-click** within reach of the steering wheel to switch to a driving view above and behind the hood at van-local `(0, 2.4, 4.35)`, looking down eight degrees so the hood remains visible across the lower foreground; hold **A/D** to steer smoothly across the three-lane road. The 48 scrolling road tiles extend more than 900 meters ahead, with a 1,000-meter camera clipping distance. Existing authored tiles are preserved and extended rather than rebuilding the van or cargo. Releasing right-click immediately restores the third-person camera and WASD walking. Forward speed stays automatic, and lateral steering stops when the van reaches either road edge. Escape/focus pauses release the wheel. The main imported truck remains intact; a separate graybox steering wheel marks the interaction point.
 
 A third-person prototype with a tiny, 0.2-meter-tall sprite character inside a full-size van and a close, 0.6-meter follow camera. Jump across cargo boxes, explore the cabin, and defend the open rear doors with a mounted railgun. The van stays near the origin while three road lanes, dividers, and roadside scenery scroll backward.
 

@@ -40,6 +40,7 @@ public static class PrototypeSceneBuilder
         game.player2AvatarPrefab = PlayerSpriteSetup.CreatePlayer2AvatarPrefab();
         NatureSpriteSetup.AssignSprites(game);
         VanModelSetup.AssignPrefabs(game);
+        BrowserMultiplayerSetup.AssignSounds(game);
         PrototypeGeometry.Build(game);
         NatureSpriteSetup.SaveBatchMeshes(game);
 

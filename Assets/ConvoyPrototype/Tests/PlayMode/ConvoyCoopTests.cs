@@ -140,6 +140,7 @@ public sealed class ConvoyCoopTests
 
         first.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
         second.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        int beforePickup = first.network.World.EventSequence;
         first.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
         second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
         yield return Wait(() => first.player.CarriedAmmo != null && second.player.CarriedAmmo != null &&
@@ -148,8 +149,11 @@ public sealed class ConvoyCoopTests
         yield return Wait(() => first.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryPickup) &&
             second.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryPickup),
             "Each player should learn from their own confirmed battery pickup.");
+        yield return Wait(() => CountSound(second.network.World, beforePickup, ConvoyPrototype.Sound.Pickup) == 2,
+            "Both confirmed pickups replicate exactly one sound each to the remote browser.");
         first.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
         second.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
+        int beforeLoad = first.network.World.EventSequence;
         first.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
         second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
         yield return Wait(() => first.ShotsAvailable == 12 && second.ShotsAvailable == 12 &&
@@ -158,6 +162,11 @@ public sealed class ConvoyCoopTests
         yield return Wait(() => first.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad) &&
             second.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad),
             "Both players independently completed the reload route.");
+        yield return Wait(() => CountSound(second.network.World, beforeLoad, ConvoyPrototype.Sound.Load) == 2,
+            "Both successful insertions replicate exactly one insert sound each.");
+        Assert.That(first.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(3));
+        Assert.That(second.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(3),
+            "A cloned peer must reuse its audio sources rather than double the loops.");
 
         first.RegisterRam(1);
         first.RegisterRam(-1);
@@ -256,6 +265,18 @@ public sealed class ConvoyCoopTests
             }
         }
         Assert.That(condition(), Is.True, message);
+    }
+
+    private static int CountSound(ConvoyNetworkWorld world, int after, ConvoyPrototype.Sound sound)
+    {
+        int count = 0;
+        for (int sequence = after + 1; sequence <= world.EventSequence; sequence++)
+        {
+            ConvoyEvent item = world.Events[sequence % ConvoyNetworkWorld.EventCapacity];
+            if (item.Sequence == sequence && item.Kind == 6 && item.Value == (int)sound)
+                count++;
+        }
+        return count;
     }
 
     [UnityTearDown]

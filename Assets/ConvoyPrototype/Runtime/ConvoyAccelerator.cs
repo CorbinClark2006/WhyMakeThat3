@@ -72,6 +72,7 @@ namespace Convoy
             rock.localPosition = new Vector3(0f, ConvoyAmmoPack.CarryHeight, ConvoyAmmoPack.CarryDistance);
             rock.localRotation = Quaternion.identity;
             game.RecordLesson(player, ConvoyTutorial.Lesson.RockPickup);
+            game.PlayInteractionSound(ConvoyPrototype.Sound.Pickup);
             return true;
         }
 

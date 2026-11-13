@@ -26,6 +26,7 @@ public static class BrowserMultiplayerSetup
         session.entityPrefab = entity;
         session.inputPrefab = input;
         game.network = session;
+        AssignSounds(game);
         EditorUtility.SetDirty(game);
         EditorUtility.SetDirty(session);
         NetworkProjectConfigUtilities.RebuildPrefabTable();
@@ -34,6 +35,22 @@ public static class BrowserMultiplayerSetup
         EditorSceneManager.MarkSceneDirty(game.gameObject.scene);
         EditorSceneManager.SaveScene(game.gameObject.scene);
         Debug.Log("Browser multiplayer configured without rebuilding the van or cargo.");
+    }
+
+    public static void AssignSounds(ConvoyPrototype game)
+    {
+        var sounds = AssetDatabase.LoadAssetAtPath<ConvoySoundBank>(
+            "Assets/ConvoyPrototype/Resources/ConvoySoundBank.asset");
+        if (sounds == null)
+            throw new System.InvalidOperationException("Missing Convoy sound bank asset.");
+        sounds.engine = LoadSound("van_running.wav");
+        sounds.wind = LoadSound("background_wind.mp3");
+        sounds.fire = LoadSound("crossbow_fire.mp3");
+        sounds.impact = LoadSound("van_hit.mp3");
+        sounds.pickup = LoadSound("pickup_soundeffect.wav");
+        sounds.load = LoadSound("insert_amo.mp3");
+        sounds.AssignTo(game);
+        EditorUtility.SetDirty(sounds);
     }
 
     private static NetworkObject CreatePrefab<T>(string name) where T : NetworkBehaviour
@@ -55,6 +72,23 @@ public static class BrowserMultiplayerSetup
             return PrefabUtility.SaveAsPrefabAsset(root, path).GetComponent<NetworkObject>();
         }
         finally { Object.DestroyImmediate(root); }
+    }
+
+    private static AudioClip LoadSound(string filename)
+    {
+        string path = "Assets/Game Assets/sound_effects/" + filename;
+        var clip = AssetDatabase.LoadAssetAtPath<AudioClip>(path);
+        if (clip == null)
+            throw new System.InvalidOperationException("Missing Convoy sound: " + path);
+        var importer = (AudioImporter)AssetImporter.GetAtPath(path);
+        var settings = importer.defaultSampleSettings;
+        if (!settings.preloadAudioData)
+        {
+            settings.preloadAudioData = true;
+            importer.defaultSampleSettings = settings;
+            importer.SaveAndReimport();
+        }
+        return clip;
     }
 
     [MenuItem("Tools/Convoy/Build Browser Co-op")]
