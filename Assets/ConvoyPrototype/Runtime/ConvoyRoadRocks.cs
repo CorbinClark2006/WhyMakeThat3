@@ -115,7 +115,8 @@ namespace Convoy
                 int index = spawnIndex++;
                 int lane = index % 3 - 1;
                 float z = CurrentSpawnDistance - overdue;
-                if (z > game.van.localPosition.z + game.CruiseSpeed * 5f)
+                if (z > game.van.localPosition.z + game.CruiseSpeed * 5f &&
+                    (game.RoadCycle == null || !game.RoadCycle.HighwayAtRoadPosition(z)))
                     SpawnObstacle(lane, z, PressureStage > 0 && index % 2 == 1);
             }
         }

@@ -39,6 +39,7 @@ namespace Convoy
         private ConvoyRoadCycle roadCycle;
         private ConvoyRepairFires repairFires;
         public ConvoyRepairFires RepairFires => repairFires;
+        public ConvoyRoadCycle RoadCycle => roadCycle;
         public int DifficultyStage => Mathf.FloorToInt(SurvivalTime / DifficultyInterval);
         public float SpeedMultiplier => 1f + DifficultyStage * 0.1f;
         public float CruiseSpeed => roadSpeed * SpeedMultiplier;
@@ -283,7 +284,6 @@ namespace Convoy
             SurvivalTime += dt;
             if (DifficultyStage != previousStage)
                 spawnTimer = Mathf.Min(spawnTimer, CurrentSpawnInterval);
-            roadCycle?.Apply();
             if (IsHighway) roadRocks.ClearForHighway();
         }
 
@@ -381,6 +381,7 @@ namespace Convoy
                 p.z = WrapRoadPosition(p.z - CurrentSpeed * dt);
                 segment.localPosition = p;
             }
+            roadCycle?.Apply();
         }
 
         public static float WrapRoadPosition(float z)
@@ -849,6 +850,7 @@ namespace Convoy
             SetPaused(true);
             repairFires?.ApplyMask(0);
             repairFires?.ResetJumps();
+            roadCycle?.ApplyHistory(Vector4.zero, 0);
             player.SetNetworkAmmo(null);
             otherPlayer?.SetNetworkAmmo(null);
             foreach (PursuerVan enemy in Pursuers)

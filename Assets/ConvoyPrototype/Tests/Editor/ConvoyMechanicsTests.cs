@@ -91,22 +91,65 @@ public sealed class ConvoyMechanicsTests
         game.EnsureRoadAndRepairs();
         Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(1));
         game.AdvanceDifficulty(30f);
+        game.ScrollRoad(0f);
         Assert.That(game.IsHighway, Is.True);
         Assert.That(game.roadRocks.Rocks.Count, Is.Zero);
         Assert.That(game.DifficultyStage, Is.EqualTo(1));
-        Transform tile = game.road.GetChild(0);
+        Transform tile = game.road.GetChild(9);
         Assert.That(tile.Find("Highway surface").gameObject.activeSelf, Is.True);
-        Assert.That(tile.Find("Dirt lane 1").gameObject.activeSelf, Is.False);
+        Assert.That(tile.Find("Dirt lane 1").gameObject.activeSelf, Is.True,
+            "Dirt remains underneath the clipped asphalt rather than switching the whole world.");
         for (int i = 0; i < 150; i++) game.roadRocks.Step(0.1f);
         Assert.That(game.roadRocks.Rocks.Count, Is.Zero);
         game.AdvanceDifficulty(15f);
+        game.ScrollRoad(0f);
         Assert.That(game.IsHighway, Is.False);
-        Assert.That(tile.Find("Highway surface").gameObject.activeSelf, Is.False);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(20f), Is.False);
         Assert.That(tile.Find("Dirt lane 1").gameObject.activeSelf, Is.True);
         game.roadRocks.Step(0.1f);
         Assert.That(game.roadRocks.Rocks.Count, Is.Zero, "Highway must not bank a spawn burst.");
         game.roadRocks.Step(game.roadRocks.CurrentSpawnSeconds);
         Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void BothSurfaceBoundariesApproachAndPassTheVanWithoutChangingTheWholeRoad()
+    {
+        game.EnsureRoadAndRepairs();
+        ApplyRoadTime(24f);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(0f), Is.False);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(100f), Is.False);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(150f), Is.True, "Highway appears ahead before its timer begins.");
+        ApplyRoadTime(29.8f);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(0f), Is.False);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(6f), Is.True);
+        Transform tile = game.road.GetChild(9).Find("Highway surface");
+        Mesh mesh = tile.GetComponent<MeshFilter>().sharedMesh;
+        Assert.That(mesh.bounds.min.z, Is.EqualTo(4.6f).Within(0.01f), "Boundary clips through the current tile.");
+        ApplyRoadTime(30.2f);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(0f), Is.True);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(-10f), Is.False, "Passed dirt stays behind.");
+        ApplyRoadTime(44.8f);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(0f), Is.True);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(8f), Is.False, "Dirt appears ahead before highway ends.");
+        ApplyRoadTime(45.2f);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(0f), Is.False);
+        Assert.That(game.RoadCycle.HighwayAtRoadPosition(-10f), Is.True, "Passed highway stays behind.");
+        Assert.That(game.RoadCycle.BoundarySequence, Is.EqualTo(2));
+        Assert.That(game.RoadCycle.History.x, Is.EqualTo(1069.5f).Within(0.1f));
+        Assert.That(game.RoadCycle.History.y, Is.EqualTo(690f).Within(0.1f));
+        Assert.That(game.road.GetChild(9).Find("Roadside nature sprites"), Is.Not.Null);
+    }
+
+    private void ApplyRoadTime(float time)
+    {
+        ConvoyWorldState state = game.CaptureWorld();
+        state.SurvivalTime = time;
+        state.Distance = ConvoyRoadCycle.CruiseDistanceAt(time, game.roadSpeed);
+        game.ApplyWorld(state);
+        foreach (Transform tile in game.road)
+            tile.localPosition = new Vector3(0f, 0f, ConvoyPrototype.RoadRear + tile.GetSiblingIndex() * ConvoyPrototype.SegmentLength);
+        game.RoadCycle.Apply();
     }
 
     [Test]

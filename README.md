@@ -78,7 +78,7 @@ must remain enabled for this App ID in the Photon dashboard.
 The build command selects the custom [Convoy WebGL template](Assets/WebGLTemplates/Convoy/index.html),
 including its matching pixel loading screen, progress indicator, and fullscreen
 control. Refresh both browsers after an update; replay uses application version
-`convoy-web-7` and cannot join rooms from an older cached build.
+`convoy-web-8` and cannot join rooms from an older cached build.
 The `main` branch holds the editable Unity project; the `gh-pages` branch holds
 the compiled site. Pushing source edits to `main` does not rebuild the website:
 rebuild WebGL and publish the contents of `Build/WebGL` to `gh-pages` to release
@@ -156,6 +156,15 @@ existing hazards clear when the highway begins, and spawning resumes on dirt
 without saving up a burst. Chasing vans and difficulty progression continue.
 The driver can release right mouse to carry a battery or help with repairs
 during the break. A compact road label/countdown shows when the surface changes.
+Surface changes are physical stretches of road: the next surface appears ahead,
+its boundary scrolls toward the van, and the old surface remains behind after
+crossing. The same transition works in both directions, including partial tiles
+and clipped lane markings; the whole landscape no longer changes in one frame.
+The 30/15-second timer still determines when the van crosses each boundary.
+Future stretches account for cruise-speed stages and current accelerator speed;
+passed boundary distances are retained and replicated for co-op/rejoining peers.
+Road meshes reuse materials and only rebuild tiles intersected by a changing
+boundary, without rebuilding nature scenery.
 
 Every nonfatal impact creates one small animated pixel fire, alternating
 available repair spots inside the cargo area and on the hood. **Jump and land

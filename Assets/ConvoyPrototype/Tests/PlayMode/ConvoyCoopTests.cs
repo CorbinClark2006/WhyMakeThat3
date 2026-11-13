@@ -43,6 +43,10 @@ public sealed class ConvoyCoopTests
             "Highway clears authority hazards and replicated entities.");
         Assert.That(first.Pursuers.Count, Is.GreaterThan(0), "Highway does not remove chasing vans.");
         Assert.That(Mathf.Abs(first.SurvivalTime - second.SurvivalTime), Is.LessThan(1f));
+        Assert.That(first.RoadCycle.HighwayAtRoadPosition(40f), Is.True);
+        Assert.That(second.RoadCycle.HighwayAtRoadPosition(40f), Is.True);
+        Assert.That(first.RoadCycle.HighwayAtRoadPosition(-80f), Is.False);
+        Assert.That(second.RoadCycle.HighwayAtRoadPosition(-80f), Is.False);
         authority.RegisterRam(1);
         authority.RegisterRam(-1);
         yield return Wait(() => first.Health == 3 && second.Health == 3 &&
@@ -52,6 +56,8 @@ public sealed class ConvoyCoopTests
         yield return new WaitForSeconds(0.2f);
         Assert.That(second.RepairFires.Mask, Is.EqualTo(3), "Fire state survives authority migration.");
         Assert.That(second.Health, Is.EqualTo(3));
+        Assert.That(second.RoadCycle.BoundarySequence, Is.EqualTo(1));
+        Assert.That(second.RoadCycle.History.x, Is.EqualTo(first.RoadCycle.History.x).Within(0.1f));
         for (int index = 0; index < 2; index++)
         {
             ConvoyPrototype actorGame = index == 0 ? first : second;
@@ -84,6 +90,10 @@ public sealed class ConvoyCoopTests
         yield return Wait(() => !first.IsHighway && !second.IsHighway &&
             first.roadRocks.Rocks.Count > 0 && second.roadRocks.Rocks.Count > 0,
             "Dirt obstacles resume on both peers.");
+        Assert.That(first.RoadCycle.HighwayAtRoadPosition(40f), Is.False);
+        Assert.That(second.RoadCycle.HighwayAtRoadPosition(40f), Is.False);
+        Assert.That(first.RoadCycle.HighwayAtRoadPosition(-80f), Is.True);
+        Assert.That(second.RoadCycle.HighwayAtRoadPosition(-80f), Is.True);
         for (int i = 0; i < 5; i++) authority.RegisterRam(1);
         yield return Wait(() => first.IsDead && second.IsDead, "Shared shutdown.");
         first.network.World.SendAction(ConvoyNetworkWorld.Action.Replay);
@@ -93,6 +103,7 @@ public sealed class ConvoyCoopTests
             "Replay restores full health.");
         Assert.That(first.RepairFires.Mask | second.RepairFires.Mask, Is.Zero);
         Assert.That(first.IsHighway || second.IsHighway, Is.False);
+        Assert.That(first.RoadCycle.BoundarySequence | second.RoadCycle.BoundarySequence, Is.Zero);
         Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.FireStomp), Is.False);
     }
 
