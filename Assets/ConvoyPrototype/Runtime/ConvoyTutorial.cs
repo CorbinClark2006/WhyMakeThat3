@@ -18,10 +18,12 @@ namespace Convoy
             public readonly Lesson Lesson;
             public readonly string Title, Key, Line1, Line2, Line3;
             public readonly Transform Target;
+            public readonly Vector3 TargetOffset;
+            public Vector3 TargetPosition => Target.TransformPoint(TargetOffset);
             public readonly int Step, Steps;
 
             public Hint(Lesson lesson, string title, string key, string line1, string line2,
-                string line3, Transform target = null, int step = 0, int steps = 1)
+                string line3, Transform target = null, int step = 0, int steps = 1, Vector3 targetOffset = default)
             {
                 Lesson = lesson;
                 Title = title;
@@ -30,6 +32,7 @@ namespace Convoy
                 Line2 = line2;
                 Line3 = line3;
                 Target = target;
+                TargetOffset = targetOffset;
                 Step = step;
                 Steps = steps;
             }
@@ -40,6 +43,7 @@ namespace Convoy
         private readonly ConvoyPrototype game;
         private float walked, looked, steered, previousSteering, refreshRemaining, hintAge, stampRemaining;
         private string stamp = "";
+        private bool reloadRouteStarted;
         public Lesson Learned { get; private set; }
         public Hint Current { get; private set; }
         public bool Visible => game.player != null && !game.ChoosingRole && !game.Paused &&
@@ -57,6 +61,7 @@ namespace Convoy
             previousSteering = game.SteeringOffset;
             Current = default;
             stamp = "";
+            reloadRouteStarted = false;
         }
 
         public void ObserveWalk(float distance)
@@ -125,6 +130,9 @@ namespace Convoy
                 return default;
             ConvoyPlayer actor = game.player;
             ConvoyAccelerator accelerator = game.accelerator;
+            if (actor.Role != ConvoyPrototype.PlayerRole.Driver && game.ShotsAvailable == 0 &&
+                !Knows(Lesson.BatteryLoad))
+                reloadRouteStarted = true;
             if (actor.CarryingRock)
             {
                 if (Knows(Lesson.RockPlace)) return default;
@@ -141,7 +149,7 @@ namespace Convoy
                 return new Hint(Lesson.BatteryLoad, "FEED THE RAILGUN", reachable ? "E" : "WASD",
                     reachable ? "INSERT THE BATTERY INTO THE GUN." : "CARRY THE BATTERY TO THE REAR.",
                     "ONE BATTERY ADDS FOUR SHOTS.",
-                    "LOOK FOR THE MARKED GUN BREECH.", game.ammoReceiver, 1, 2);
+                    "E AT THE RAILGUN LOADS THE BATTERY.", game.gun, 1, 2, ConvoyPrototype.GunLoadingPoint);
             }
             if (actor.Driving)
             {
@@ -150,6 +158,18 @@ namespace Convoy
                     "HOLD RIGHT MOUSE + STEER LEFT/RIGHT.",
                     "DODGE ROCKS AND BUSHES AHEAD.",
                     "RELEASE RIGHT MOUSE TO STEP AWAY.", null, 1, 2);
+            }
+            if (reloadRouteStarted && !Knows(Lesson.BatteryLoad))
+            {
+                ConvoyAmmoPack nearby = actor.FindReachableAmmo();
+                ConvoyAmmoPack pack = nearby ?? actor.FindAvailableAmmo();
+                bool reachable = !actor.Mounted && nearby != null;
+                return new Hint(Lesson.BatteryPickup, "EMPTY GUN? FOLLOW THE BATTERY",
+                    actor.Mounted ? "RMB" : reachable ? "E" : "WASD",
+                    actor.Mounted ? "RELEASE RIGHT MOUSE TO STEP AWAY." :
+                        reachable ? "PICK UP THIS AMMO BATTERY." : "FOLLOW THE MARKER TO THE BATTERY.",
+                    "THEN BRING IT BACK TO THE RAILGUN.",
+                    "E AT THE RAILGUN LOADS FOUR SHOTS.", pack != null ? pack.transform : game.ammoSupply, 0, 2);
             }
             if (actor.Mounted)
             {
@@ -177,7 +197,7 @@ namespace Convoy
                 return new Hint(Lesson.DriverMount, "TAKE THE WHEEL", "RMB",
                     "HOLD RIGHT MOUSE AT THE WHEEL.",
                     "YOU WILL SWITCH TO THE HOOD VIEW.",
-                    "KEEP HOLDING IT. A/D STEER.", game.van.Find("Driver steering wheel"), 0, 2);
+                    "KEEP HOLDING IT. A/D STEER.", game.van, 0, 2, ConvoyPrototype.DriverBoardingPoint);
             if (actor.Role != ConvoyPrototype.PlayerRole.Driver && !Knows(Lesson.GunMount) && actor.CanMount)
                 return new Hint(Lesson.GunMount, "YOUR SEAT AT THE REAR", "RMB",
                     "HOLD RIGHT MOUSE BY THE GUN.",
@@ -238,10 +258,10 @@ namespace Convoy
             if (Current.Target == null)
                 return;
             Camera camera = game.player.Mounted ? game.gunCamera : game.player.view;
-            Vector3 point = camera.WorldToViewportPoint(Current.Target.position);
+            Vector3 point = camera.WorldToViewportPoint(Current.TargetPosition);
             if (point.z <= 0f)
             {
-                bool right = camera.transform.InverseTransformPoint(Current.Target.position).x >= 0f;
+                bool right = camera.transform.InverseTransformPoint(Current.TargetPosition).x >= 0f;
                 DirectionMarker(right ? 1240 : 40, 360, right ? "TURN RIGHT" : "TURN LEFT", alpha);
                 return;
             }
@@ -263,7 +283,12 @@ namespace Convoy
                 RectFill(new Rect(x + side * size - (side > 0 ? 8 : 0), y + size - 2, 8, 2), Gold, alpha);
                 RectFill(new Rect(x + side * size - (side > 0 ? 2 : 0), y + size - 8, 2, 8), Gold, alpha);
             }
-            Text("HERE", x + 20, y - 7, 2, Paper, alpha);
+            Text("HERE", Mathf.Clamp(x + 20, 24, 1210), y - 7, 2, Paper, alpha);
+            DrawTargetLine(x, y, size, alpha);
+        }
+
+        private static void DrawTargetLine(float x, float y, float size, float alpha)
+        {
             float elbow = Mathf.Min(x, 578);
             for (float dash = y + size + 10; dash < 498; dash += 12)
                 RectFill(new Rect(x - 1, dash, 2, 5), Copper, alpha * 0.6f);
@@ -272,6 +297,7 @@ namespace Convoy
 
         private void DirectionMarker(float x, float y, string caption, float alpha)
         {
+            DrawTargetLine(x, y, 6, alpha);
             RectFill(new Rect(x - 6, y - 6, 12, 12), Gold, alpha);
             RectFill(new Rect(x - 2, y - 2, 4, 4), Ink, alpha);
             float labelX = Mathf.Clamp(x + 18, 48, 1232 - caption.Length * 12);

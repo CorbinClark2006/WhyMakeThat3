@@ -78,6 +78,49 @@ public sealed class ConvoyPlayModeTests
     }
 
     [UnityTest]
+    public IEnumerator FirstEmptyGunActualClicksGuideBatteryPickupAndEAtRailgun()
+    {
+        game.player.SetSpawn(new Vector3(0.9f, 0.82f, -1.35f), Quaternion.identity);
+        InputSystem.QueueStateEvent(mouse, new MouseState().WithButton(MouseButton.Right));
+        yield return new WaitForSeconds(0.1f);
+        Assert.That(game.player.Mounted, Is.True);
+        for (int shot = 0; shot < 4; shot++)
+        {
+            InputSystem.QueueStateEvent(mouse, new MouseState().WithButton(MouseButton.Right).WithButton(MouseButton.Left));
+            yield return new WaitForSeconds(0.1f);
+            InputSystem.QueueStateEvent(mouse, new MouseState().WithButton(MouseButton.Right));
+            yield return new WaitForSeconds(0.85f);
+        }
+        Assert.That(game.ShotsAvailable, Is.Zero);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.GunFire), Is.True);
+        Assert.That(game.Tutorial.Current.Lesson, Is.EqualTo(ConvoyTutorial.Lesson.BatteryPickup));
+        Assert.That(game.Tutorial.Current.Key, Is.EqualTo("RMB"));
+        Assert.That(game.Tutorial.Current.Target, Is.SameAs(game.supplyPack.transform));
+        InputSystem.QueueStateEvent(mouse, new MouseState());
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(game.Tutorial.Current.Key, Is.EqualTo("WASD"));
+        game.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(game.Tutorial.Current.Key, Is.EqualTo("E"));
+        InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.E));
+        yield return new WaitForSeconds(0.1f);
+        InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(game.player.CarriedAmmo, Is.Not.Null);
+        Assert.That(game.Tutorial.Current.Target, Is.SameAs(game.gun));
+        Assert.That(Vector3.Distance(game.Tutorial.Current.TargetPosition,
+            game.gun.TransformPoint(ConvoyPrototype.GunLoadingPoint)), Is.LessThan(0.001f));
+        game.player.SetSpawn(new Vector3(-0.25f, 1f, -2f), Quaternion.identity);
+        yield return null;
+        Assert.That(game.Tutorial.FindHint().Key, Is.EqualTo("E"));
+        InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.E));
+        yield return null;
+        yield return null;
+        Assert.That(game.ShotsAvailable, Is.EqualTo(4));
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.True);
+    }
+
+    [UnityTest]
     public IEnumerator TutorialActualControlsTeachJumpDrivingAndHideDuringRespawn()
     {
         game.showRoleSelection = true;
@@ -291,7 +334,7 @@ public sealed class ConvoyPlayModeTests
         yield return new WaitForSeconds(0.4f);
         Assert.That(game.player.Driving, Is.True);
         Assert.That(game.player.GetComponent<CharacterController>().enabled, Is.False);
-        Assert.That(game.SteeringOffset, Is.InRange(1f, 1.5f));
+        Assert.That(game.SteeringOffset, Is.InRange(4f, ConvoyPrototype.RoadEdge));
         Assert.That(game.van.localPosition.x, Is.EqualTo(game.SteeringOffset).Within(0.1f));
         Assert.That(game.player.transform.localPosition.z, Is.EqualTo(localZ).Within(0.001f));
         Assert.That(Vector3.Distance(game.player.view.transform.position,

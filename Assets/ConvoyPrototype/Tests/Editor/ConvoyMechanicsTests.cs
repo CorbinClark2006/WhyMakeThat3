@@ -98,6 +98,9 @@ public sealed class ConvoyMechanicsTests
         Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryPickup), Is.True);
         Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.False);
         Assert.That(game.Tutorial.FindHint().Key, Is.EqualTo("WASD"));
+        Assert.That(game.Tutorial.FindHint().Target, Is.SameAs(game.gun));
+        Assert.That(game.Tutorial.FindHint().TargetPosition,
+            Is.EqualTo(game.gun.TransformPoint(ConvoyPrototype.GunLoadingPoint)));
         Assert.That(game.player.TryInteract(), Is.False, "Picking up is not the same as loading.");
         Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.False);
         game.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
@@ -131,15 +134,19 @@ public sealed class ConvoyMechanicsTests
         game.showRoleSelection = true;
         game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
         Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.DriverMount));
+        Assert.That(game.Tutorial.FindHint().TargetPosition,
+            Is.EqualTo(game.van.TransformPoint(ConvoyPrototype.DriverBoardingPoint)));
+        Assert.That(Vector3.Distance(game.Tutorial.FindHint().TargetPosition,
+            game.van.TransformPoint(ConvoyPrototype.SteeringWheelPosition)), Is.GreaterThan(1f));
         Assert.That(game.player.MountDriver(), Is.True);
         Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.DriverMount), Is.True);
         Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.Steer));
         game.Steer(0f, 1f);
         Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.False);
         for (int frame = 0; frame < 100; frame++)
-            game.Steer(1f, 0.001f);
+            game.Steer(1f, 0.0002f);
         Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.False);
-        game.Steer(1f, 0.05f);
+        game.Steer(1f, 0.01f);
         Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.True);
         Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.None));
         game.player.DismountDriver();
@@ -176,6 +183,87 @@ public sealed class ConvoyMechanicsTests
         Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.None));
         game.player.Dismount();
         Assert.That(game.Tutorial.FindHint().Lesson, Is.Not.EqualTo(ConvoyTutorial.Lesson.GunMount));
+    }
+
+    [Test]
+    public void FirstEmptyGunGuidesDismountPickupAndActualGunLoadingAfterFireLessonRetires()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Gunner);
+        game.player.SetSpawn(new Vector3(0.9f, 0.82f, -1.35f), Quaternion.identity);
+        Assert.That(game.player.Mount(), Is.True);
+        for (int i = 0; i < 4; i++)
+        {
+            var state = game.CaptureWorld();
+            state.Cooldown = 0f;
+            game.ApplyWorld(state);
+            Assert.That(game.TryFire(), Is.True);
+        }
+        Assert.That(game.ShotsAvailable, Is.Zero);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.GunFire), Is.True);
+        var hint = game.Tutorial.FindHint();
+        Assert.That(hint.Lesson, Is.EqualTo(ConvoyTutorial.Lesson.BatteryPickup));
+        Assert.That(hint.Key, Is.EqualTo("RMB"));
+        Assert.That(hint.Target, Is.SameAs(game.supplyPack.transform));
+        game.SetPaused(true);
+        game.SetPaused(false);
+        Assert.That(game.Tutorial.FindHint().Key, Is.EqualTo("WASD"));
+        game.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        Assert.That(game.Tutorial.FindHint().Key, Is.EqualTo("E"));
+        Assert.That(game.player.TryInteract(), Is.True);
+        hint = game.Tutorial.FindHint();
+        Assert.That(hint.Lesson, Is.EqualTo(ConvoyTutorial.Lesson.BatteryLoad));
+        Assert.That(hint.Target, Is.SameAs(game.gun));
+        Assert.That(hint.TargetPosition, Is.EqualTo(game.gun.TransformPoint(ConvoyPrototype.GunLoadingPoint)));
+        Assert.That(hint.Key, Is.EqualTo("WASD"));
+        Assert.That(game.player.TryInteract(), Is.False);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.False);
+        game.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
+        Assert.That(game.Tutorial.FindHint().Key, Is.EqualTo("E"));
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(game.ShotsAvailable, Is.EqualTo(4));
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.True);
+        game.ApplyAmmoCount(0);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.Not.EqualTo(ConvoyTutorial.Lesson.BatteryPickup));
+    }
+
+    [Test]
+    public void SteeringCrossesALaneInFourTenthsAndReversesImmediatelyWithoutOvershootingRoad()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        Assert.That(game.player.MountDriver(), Is.True);
+        game.Steer(1f, 0.4f);
+        Assert.That(game.SteeringOffset, Is.EqualTo(4.8f).Within(0.001f));
+        game.Steer(-1f, 0.1f);
+        Assert.That(game.SteeringOffset, Is.EqualTo(3.6f).Within(0.001f));
+        game.Steer(-1f, 1f);
+        Assert.That(game.SteeringOffset, Is.EqualTo(-ConvoyPrototype.RoadEdge));
+    }
+
+    [Test]
+    public void RoadPressureDoublesEarlyAndReachesDenseBoundedTrafficByNinetySeconds()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        Assert.That(game.roadRocks.CurrentSpawnSeconds, Is.EqualTo(7f));
+        game.AdvanceDifficulty(14.99f);
+        Assert.That(game.roadRocks.PressureStage, Is.Zero);
+        game.AdvanceDifficulty(0.01f);
+        Assert.That(game.DifficultyStage, Is.Zero, "Road pressure rises independently of the 30-second cruise stage.");
+        Assert.That(game.roadRocks.CurrentSpawnSeconds, Is.LessThan(3.12f));
+        game.AdvanceDifficulty(15f);
+        Assert.That(game.roadRocks.CurrentSpawnSeconds, Is.EqualTo(2f));
+        game.AdvanceDifficulty(60f);
+        Assert.That(game.roadRocks.CurrentSpawnSeconds, Is.EqualTo(0.85f));
+        game.van.localPosition += Vector3.right * 20f;
+        for (int i = 0; i < 100; i++)
+        {
+            game.roadRocks.Step(0.1f);
+            Assert.That(game.roadRocks.Rocks.Count, Is.LessThanOrEqualTo(ConvoyRoadRocks.HazardLimit));
+        }
+        Assert.That(game.roadRocks.Rocks.Count, Is.GreaterThanOrEqualTo(6));
+        Assert.That(game.RamCount, Is.Zero);
     }
 
     [Test]
@@ -226,7 +314,7 @@ public sealed class ConvoyMechanicsTests
             Assert.That(game.CruiseSpeed, Is.GreaterThan(speed));
             Assert.That(game.CurrentPursuerLimit, Is.LessThanOrEqualTo(8));
             Assert.That(game.CurrentSpawnInterval, Is.GreaterThanOrEqualTo(2.5f));
-            Assert.That(game.roadRocks.CurrentSpacing / game.CruiseSpeed, Is.GreaterThanOrEqualTo(4.999f));
+            Assert.That(game.roadRocks.CurrentSpacing / game.CruiseSpeed, Is.GreaterThanOrEqualTo(0.849f));
             Assert.That(game.roadRocks.CurrentSpawnDistance / game.CruiseSpeed, Is.GreaterThanOrEqualTo(6.499f));
             speed = game.CruiseSpeed;
         }
@@ -269,7 +357,7 @@ public sealed class ConvoyMechanicsTests
         game.showRoleSelection = true;
         game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
         game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
-        Assert.That(game.roadRocks.CurrentSpacing, Is.LessThan(ConvoyRoadRocks.Spacing));
+        Assert.That(game.roadRocks.CurrentSpawnSeconds, Is.EqualTo(2f));
         for (int index = 0; index < 2; index++)
         {
             game.roadRocks.ApplyProgress(new Vector3(game.roadRocks.CurrentSpacing - 1f, index, 1f));
@@ -319,7 +407,7 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
-    public void DriverRoadRocksAreSparseGroundedAndDamageOnceIncludingAccelerator()
+    public void DriverRoadRocksAreGroundedAndDamageOnceIncludingAccelerator()
     {
         game.showRoleSelection = true;
         game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
@@ -337,7 +425,7 @@ public sealed class ConvoyMechanicsTests
         Assert.That(game.accelerator.Impacts, Is.EqualTo(1));
         Assert.That(game.DamageFlash, Is.EqualTo(1f));
         Assert.That(game.player.ImpactVelocity.sqrMagnitude, Is.GreaterThan(0f));
-        Assert.That(game.roadRocks.Rocks.Count, Is.Zero);
+        Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(1), "The next lane's obstacle arrives after seven seconds.");
         game.roadRocks.Step(1f);
         Assert.That(game.RamCount, Is.EqualTo(1), "The same rock cannot deal repeated damage.");
         for (int i = 0; i < 2; i++)
@@ -363,11 +451,11 @@ public sealed class ConvoyMechanicsTests
         game.roadRocks.Step(7f);
         Assert.That(game.RamCount, Is.Zero, "Steering into an open lane must avoid the center rock.");
         game.roadRocks.Step(1f);
-        Assert.That(game.roadRocks.Rocks.Count, Is.Zero);
-        game.roadRocks.Step(5f);
-        Assert.That(game.roadRocks.Rocks.Count, Is.Zero, "Do not spawn before 300 meters.");
-        game.roadRocks.Step(0.1f);
         Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(1));
+        game.roadRocks.Step(5.9f);
+        Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(1), "Next spawn waits for seven more seconds of travel.");
+        game.roadRocks.Step(0.2f);
+        Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(2));
         Transform rock = game.roadRocks.Rocks[0];
         Assert.That(rock.localPosition.x, Is.EqualTo(-4.8f));
         Vector3 position = rock.localPosition;
@@ -379,7 +467,7 @@ public sealed class ConvoyMechanicsTests
         game.accelerator.Step(15f);
         game.roadRocks.Step(20f);
         Assert.That(rock.localPosition, Is.EqualTo(position));
-        Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(1), "Stopped travel must not keep spawning rocks.");
+        Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(2), "Stopped travel must not keep spawning rocks.");
     }
 
     [Test]
@@ -629,8 +717,8 @@ public sealed class ConvoyMechanicsTests
         Assert.That(game.player.MountDriver(), Is.True);
         for (int i = 0; i < 3; i++) game.accelerator.RegisterImpact();
         game.accelerator.Step(7.5f);
-        game.Steer(1f, 1f);
-        Assert.That(game.SteeringOffset, Is.EqualTo(ConvoyPrototype.SteeringSpeed * 0.5f));
+        game.Steer(1f, 0.5f);
+        Assert.That(game.SteeringOffset, Is.EqualTo(ConvoyPrototype.SteeringSpeed * 0.25f));
         game.accelerator.Step(7.5f);
         float offset = game.SteeringOffset;
         game.Steer(-1f, 5f);
@@ -1028,7 +1116,7 @@ public sealed class ConvoyMechanicsTests
         Assert.That(game.SteeringOffset, Is.Zero);
         Assert.That(game.player.MountDriver(), Is.True);
         game.Steer(1f, 0.5f);
-        Assert.That(game.SteeringOffset, Is.EqualTo(1.5f));
+        Assert.That(game.SteeringOffset, Is.EqualTo(ConvoyPrototype.RoadEdge));
         game.Steer(1f, 20f);
         Assert.That(game.SteeringOffset, Is.EqualTo(ConvoyPrototype.RoadEdge));
         game.Steer(-1f, 20f);

@@ -402,12 +402,16 @@ namespace Convoy
             return true;
         }
 
-        public ConvoyAmmoPack FindReachableAmmo()
+        public ConvoyAmmoPack FindReachableAmmo() => FindAmmo(true);
+
+        public ConvoyAmmoPack FindAvailableAmmo() => FindAmmo(false);
+
+        private ConvoyAmmoPack FindAmmo(bool requireReach)
         {
             Vector3 origin = transform.TransformPoint(Vector3.up * EyeHeight);
             Physics.SyncTransforms();
             ConvoyAmmoPack nearest = null;
-            float distance = 0.75f;
+            float distance = requireReach ? 0.75f : float.PositiveInfinity;
             foreach (ConvoyAmmoPack pack in game.van.GetComponentsInChildren<ConvoyAmmoPack>())
             {
                 if (pack.Consumed || pack.IsCarried)
@@ -415,7 +419,7 @@ namespace Convoy
                 float candidate = Vector3.Distance(origin, pack.transform.position);
                 if (candidate >= distance)
                     continue;
-                if (!CanReachInteraction(pack.transform.position, pack.transform))
+                if (requireReach && !CanReachInteraction(pack.transform.position, pack.transform))
                     continue;
                 nearest = pack;
                 distance = candidate;

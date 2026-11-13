@@ -19,10 +19,12 @@ namespace Convoy
         public bool WorldAuthority => !Online || network.World.HasStateAuthority;
         public bool RoadHazardsEnabled => DriverPractice || Online;
         public bool ContainsPlayer(ConvoyPlayer actor) => actor == player || (Online && actor == otherPlayer);
-        public const float SteeringSpeed = 3f;
+        public const float SteeringSpeed = 12f;
         public const float RoadEdge = 4.95f;
         public float SteeringOffset { get; private set; }
         public static readonly Vector3 DriverSpawn = new Vector3(-0.9f, 0.82f, 2.5f);
+        public static readonly Vector3 DriverBoardingPoint = new Vector3(-0.9f, 0.84f, 2.5f);
+        public static readonly Vector3 GunLoadingPoint = new Vector3(0f, -0.1f, -0.5f);
         public static readonly Vector3 SteeringWheelPosition = new Vector3(-0.9f, 1.6f, 3.5f);
         public static readonly Vector3 DriverCameraPosition = new Vector3(0f, 2.4f, 4.35f);
         [Header("Chase tuning")]
@@ -489,7 +491,7 @@ namespace Convoy
                 return false;
             Physics.SyncTransforms();
             bool atSocket = CanReachAmmoLoadingPoint(pack, ammoReceiver.position, actor);
-            Vector3 breech = gun.TransformPoint(new Vector3(0f, -0.1f, -0.5f));
+            Vector3 breech = gun.TransformPoint(GunLoadingPoint);
             bool atGun = pack.IsCarried && actor.CarriedAmmo == pack &&
                 CanReachAmmoLoadingPoint(pack, breech, actor, 1.5f);
             return atSocket || atGun;

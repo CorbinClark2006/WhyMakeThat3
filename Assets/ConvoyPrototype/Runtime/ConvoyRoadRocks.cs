@@ -6,13 +6,17 @@ namespace Convoy
     public sealed class ConvoyRoadRocks : MonoBehaviour
     {
         public const float SpawnDistance = 140f;
-        public const float Spacing = 300f;
+        public const float PressureInterval = 15f;
+        public const float StartingSpawnSeconds = 7f;
+        public const float MinimumSpawnSeconds = 0.85f;
         public const float RockHeight = 2.2f;
         public const float BushHeight = 1.8f;
         public const int HazardLimit = 8;
         public const int BushSpriteIndex = 5;
-        public float CurrentSpacing => Mathf.Max(Spacing / (1f + game.DifficultyStage * 0.25f),
-            game.CruiseSpeed * 5f);
+        public int PressureStage => Mathf.FloorToInt(game.SurvivalTime / PressureInterval);
+        public float CurrentSpawnSeconds => Mathf.Max(MinimumSpawnSeconds,
+            StartingSpawnSeconds / (1f + PressureStage * 1.25f));
+        public float CurrentSpacing => game.CruiseSpeed * CurrentSpawnSeconds;
         public float CurrentSpawnDistance => Mathf.Max(SpawnDistance, game.CruiseSpeed * 6.5f);
         public ConvoyPrototype game;
         public readonly List<Transform> Rocks = new List<Transform>();
@@ -106,7 +110,7 @@ namespace Convoy
                 int lane = index % 3 - 1;
                 float z = CurrentSpawnDistance - overdue;
                 if (z > game.van.localPosition.z + game.CruiseSpeed * 5f)
-                    SpawnObstacle(lane, z, game.DifficultyStage > 0 && index % 2 == 1);
+                    SpawnObstacle(lane, z, PressureStage > 0 && index % 2 == 1);
             }
         }
 

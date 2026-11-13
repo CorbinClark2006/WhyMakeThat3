@@ -78,7 +78,7 @@ must remain enabled for this App ID in the Photon dashboard.
 The build command selects the custom [Convoy WebGL template](Assets/WebGLTemplates/Convoy/index.html),
 including its matching pixel loading screen, progress indicator, and fullscreen
 control. Refresh both browsers after an update; replay uses application version
-`convoy-web-4` and cannot join rooms from an older cached build.
+`convoy-web-5` and cannot join rooms from an older cached build.
 The `main` branch holds the editable Unity project; the `gh-pages` branch holds
 the compiled site. Pushing source edits to `main` does not rebuild the website:
 rebuild WebGL and publish the contents of `Build/WebGL` to `gh-pages` to release
@@ -120,6 +120,13 @@ or a mouse-button diagram. Carried batteries/rocks point you toward the loading
 breech/pedal; **E** appears only when the same reach and collision checks used
 by the interaction say it can succeed. Movement, looking, jumping, aiming,
 firing, hood-view driving, steering, and road-hazard awareness are covered too.
+The driving marker sits at the edge of the driver's standing box, not on the
+wheel. When the gun first empties before you've learned reloading, guidance
+points to an available battery even while still in the gun sight: release
+right mouse, follow the marker, and press **E** when reachable. After pickup,
+the marker moves to the railgun's actual loading breech. The route remains
+active after the firing lesson retires, and disappears after your successful
+load; partner reloads and failed interactions do not dismiss it.
 
 Successfully performed steps retire for **that player during this game**, with
 a brief "logged" stamp. Unfinished lessons remain available after difficulty
@@ -136,8 +143,8 @@ fault warning still appears after you've learned how to repair it.
 
 ### Endless survival difficulty
 
-The first 30 seconds retain the easier starting tuning. Every **30 seconds of
-active survival** raises the difficulty stage:
+Every **30 seconds of active survival** raises the cruise/chaser difficulty
+stage. Road pressure ramps separately every **15 seconds**:
 
 - Cruise speed adds **10% of the starting speed per stage** (23, 25.3, 27.6 m/s,
   and so on). Speed continues increasing instead of reaching a fixed maximum.
@@ -146,16 +153,28 @@ active survival** raises the difficulty stage:
   with a 2.5-second minimum. Chasers' relative approach speed scales with cruise
   speed and stage pressure, so they still catch the accelerating van. Warnings
   and retreat times shorten, but keep 1.2-second and two-second minimums.
-- Driver practice and co-op increase road-obstacle frequency. After the first
-  30 seconds, rocks alternate with **1.8-meter bush/grass clumps** using the existing
+- Driver practice and co-op start with a center-lane rock and a seven-second
+  travel interval between new obstacles. Every 15 seconds, this interval follows
+  `7 / (1 + 1.25 * roadStage)`: about **3.11 seconds at 15s**, **2 seconds at
+  30s**, **1.17 seconds at 60s**, and **0.85 seconds from 90s onward**.
+  Distance spacing scales with cruise speed, so acceleration never undoes the
+  increased density. After the first 15 seconds, rocks alternate with
+  **1.8-meter bush/grass clumps** using the existing
   `funky_grass_2` pixel art. Both types damage the van and loosen the accelerator
   rock exactly once on impact. Spawned obstacles cycle lanes one at a time;
   there are never rows blocking every lane.
-- Road spacing is at least **five seconds of cruise travel**, spawn visibility
-  is at least 6.5 seconds, and at most eight road obstacles are active. Missed
+- Spawn visibility remains at least **6.5 seconds of cruise travel**, while
+  up to **eight road obstacles** can be active for a much denser late-game road.
+  New obstacles arrive in staggered lanes, never an all-lane wall. Missed
   spawns after a long hitch are skipped rather than replayed as a burst. These
   object/reaction-time limits protect smoothness while cruise speed and chaser
   pressure keep increasing.
+
+Steering is four times snappier: **12 meters/second of lateral travel at starting
+speed**, crossing one 4.8-meter lane in **0.4 seconds**. Opposite input reverses
+immediately rather than waiting for a slow turn. Existing speed scaling,
+road-edge limits, wheel/hood controls, suspension impacts, and stopped-van
+behavior remain intact.
 
 The HUD shows survival time, difficulty, and speed. Online players share one
 authority-owned clock, including after an authority transfer; local pause/tab
