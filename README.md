@@ -24,6 +24,13 @@ In Unity Hub, choose **Add project from disk** and select the cloned folder. Ope
 
 ## Playable prototype: DUST // REARGUARD
 
+The home screen's **Credits** button opens **The Crew**, a palette-matched
+pixel panel crediting Corbin Clark (lead development/technology), Nick Rosen
+(game design/environment art), Clark Washnock (environment/pixel art),
+Addie Johnson (lead art/2D art/3D modeling), Carter Scott (2D art/3D modeling)
+and Roman Keliiholokai (music). **Back** returns to the home screen without
+starting a game.
+
 ### Two-player browser co-op
 
 Both players open **https://corbinclark2006.github.io/WhyMakeThat3/** on a

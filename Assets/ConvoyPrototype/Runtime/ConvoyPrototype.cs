@@ -121,6 +121,7 @@ namespace Convoy
         private float gunYaw, gunPitch;
         private float healthDisplayAge = 6f;
         private bool pausedForFocus;
+        private bool showingCredits;
         private AudioSource audioSource, engineAudio, windAudio;
         private SpriteRenderer chargeDigits;
         private Sprite chargeSprite;
@@ -704,6 +705,26 @@ namespace Convoy
             if (Online) network.World.BroadcastSound(sound);
         }
 
+        private void DrawCredits()
+        {
+            UI.Center("THE CREW", new Rect(160, 64, 960, 56), 5, ConvoyPixelUI.Gold);
+            ConvoyPixelUI.Panel(new Rect(248, 148, 784, 432));
+            Credit("CORBIN CLARK", "LEAD DEVELOPER / TECHNOLOGY", 174);
+            Credit("NICK ROSEN", "GAME DESIGN / ENVIRONMENT ART", 238);
+            Credit("CLARK WASHNOCK", "ENVIRONMENT ART / PIXEL ART", 302);
+            Credit("ADDIE JOHNSON", "LEAD ARTIST / 2D ART / 3D MODELING", 366);
+            Credit("CARTER SCOTT", "2D ART / 3D MODELING", 430);
+            Credit("ROMAN KELIIHOLOKAI", "MUSIC", 494);
+            if (UI.Button(new Rect(464, 612, 352, 52), "BACK"))
+                showingCredits = false;
+        }
+
+        private void Credit(string name, string role, float y)
+        {
+            UI.Center(name, new Rect(280, y, 720, 26), 3, ConvoyPixelUI.Paper);
+            UI.Center(role, new Rect(280, y + 30, 720, 18), 2, ConvoyPixelUI.Copper);
+        }
+
         private void OnGUI()
         {
             if (player == null || (network != null && (network.ShowLobby || (Online && (Paused || IsDead)))))
@@ -714,6 +735,13 @@ namespace Convoy
             if (ChoosingRole)
             {
                 UI.Backdrop();
+                if (showingCredits)
+                {
+                    DrawCredits();
+                    GUI.color = previousColor;
+                    GUI.matrix = previous;
+                    return;
+                }
                 UI.Center("CONVOY", new Rect(160, 130, 960, 64), 7, ConvoyPixelUI.Gold);
                 UI.Center("SOLO", new Rect(160, 218, 960, 40), 2, ConvoyPixelUI.Copper);
                 ConvoyPixelUI.Panel(new Rect(248, 284, 368, 232));
@@ -726,10 +754,13 @@ namespace Convoy
                     SelectRole(PlayerRole.Driver);
                 if (network != null && UI.Button(new Rect(392, 552, 496, 72), "CO-OP"))
                     network.ShowLobby = true;
+                if (UI.Button(new Rect(944, 612, 280, 52), "CREDITS"))
+                    showingCredits = true;
                 GUI.color = previousColor;
                 GUI.matrix = previous;
                 return;
             }
+
             if (!Online && (IsDead || Paused))
             {
                 UI.Backdrop();
