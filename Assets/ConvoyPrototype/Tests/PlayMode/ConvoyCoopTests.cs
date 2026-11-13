@@ -116,7 +116,7 @@ public sealed class ConvoyCoopTests
         Assert.That(second.ShotsAvailable, Is.EqualTo(10));
         Assert.That(second.accelerator.NeedsRock, Is.False);
         Assert.That(first.Pursuers.Count, Is.EqualTo(second.Pursuers.Count), "Authority handoff must not duplicate entities.");
-        second.AdvanceDifficulty(60f);
+        second.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         yield return Wait(() => first.DifficultyStage == 1 && second.DifficultyStage == 1,
             "Difficulty elapsed time must replicate after authority handoff.");
         Assert.That(first.CruiseSpeed, Is.EqualTo(second.CruiseSpeed).Within(0.001f));

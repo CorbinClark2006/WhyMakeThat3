@@ -29,7 +29,7 @@ namespace Convoy
         [Min(1f)] public float roadSpeed = 23f;
         [Min(2f)] public float spawnInterval = 16f;
         [Range(1, 8)] public int maxPursuers = 2;
-        public const float DifficultyInterval = 60f;
+        public const float DifficultyInterval = 30f;
         public const int PursuerLimit = 8;
         public float SurvivalTime { get; private set; }
         public int DifficultyStage => Mathf.FloorToInt(SurvivalTime / DifficultyInterval);

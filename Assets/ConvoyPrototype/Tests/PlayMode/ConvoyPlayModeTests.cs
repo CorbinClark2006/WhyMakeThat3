@@ -78,10 +78,10 @@ public sealed class ConvoyPlayModeTests
     }
 
     [UnityTest]
-    public IEnumerator DifficultyActualUpdateSpawnsExtraChasersAtMinuteBoundaryAndRespectsCap()
+    public IEnumerator DifficultyActualUpdateSpawnsExtraChasersAtThirtySecondsAndRespectsCap()
     {
         game.player.enabled = false;
-        game.AdvanceDifficulty(59f);
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval - 1f);
         Assert.That(game.DifficultyStage, Is.Zero);
         yield return new WaitForSeconds(1.2f);
         Assert.That(game.DifficultyStage, Is.EqualTo(1));

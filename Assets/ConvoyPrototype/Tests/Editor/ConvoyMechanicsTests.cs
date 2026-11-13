@@ -48,9 +48,10 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
-    public void DifficultyChangesExactlyOnEachMinuteAndKeepsRisingWithObjectLimits()
+    public void DifficultyChangesExactlyEveryThirtySecondsAndKeepsRisingWithObjectLimits()
     {
-        game.AdvanceDifficulty(59f);
+        Assert.That(ConvoyPrototype.DifficultyInterval, Is.EqualTo(30f));
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval - 1f);
         game.AdvanceDifficulty(0.99f);
         Assert.That(game.DifficultyStage, Is.Zero);
         Assert.That(game.CurrentSpeed, Is.EqualTo(23f));
@@ -64,7 +65,7 @@ public sealed class ConvoyMechanicsTests
         float speed = game.CruiseSpeed;
         for (int i = 0; i < 100; i++)
         {
-            game.AdvanceDifficulty(60f);
+            game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
             Assert.That(game.CruiseSpeed, Is.GreaterThan(speed));
             Assert.That(game.CurrentPursuerLimit, Is.LessThanOrEqualTo(8));
             Assert.That(game.CurrentSpawnInterval, Is.GreaterThanOrEqualTo(2.5f));
@@ -79,18 +80,18 @@ public sealed class ConvoyMechanicsTests
     public void DifficultyFreezesForLocalPauseSelectionAndDeathAndRepairsRestoreNewCruiseSpeed()
     {
         game.showRoleSelection = true;
-        game.AdvanceDifficulty(60f);
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         Assert.That(game.SurvivalTime, Is.Zero);
         game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
         game.SetPaused(true);
-        game.AdvanceDifficulty(60f);
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         Assert.That(game.SurvivalTime, Is.Zero);
         game.SetPaused(false);
-        game.AdvanceDifficulty(60f);
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         for (int i = 0; i < 3; i++) game.accelerator.RegisterImpact();
         game.accelerator.Step(15f);
         Assert.That(game.CurrentSpeed, Is.Zero);
-        game.AdvanceDifficulty(60f);
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         Assert.That(game.DifficultyStage, Is.EqualTo(2), "A broken accelerator must not suspend survival difficulty.");
         game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2.95f), Quaternion.identity);
         Assert.That(game.player.TryInteract(), Is.True);
@@ -100,7 +101,7 @@ public sealed class ConvoyMechanicsTests
         Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed * 1.2f).Within(0.001f));
         for (int i = 0; i < 5; i++) game.RegisterRam(1);
         float elapsed = game.SurvivalTime;
-        game.AdvanceDifficulty(60f);
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         Assert.That(game.SurvivalTime, Is.EqualTo(elapsed));
         Assert.That(game.CurrentSpeed, Is.Zero);
     }
@@ -110,7 +111,7 @@ public sealed class ConvoyMechanicsTests
     {
         game.showRoleSelection = true;
         game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
-        game.AdvanceDifficulty(60f);
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         Assert.That(game.roadRocks.CurrentSpacing, Is.LessThan(ConvoyRoadRocks.Spacing));
         for (int index = 0; index < 2; index++)
         {
@@ -141,7 +142,7 @@ public sealed class ConvoyMechanicsTests
         float original = enemy.transform.localPosition.z;
         enemy.Step(1f);
         float baseClosing = enemy.transform.localPosition.z - original;
-        game.AdvanceDifficulty(60f);
+        game.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         original = enemy.transform.localPosition.z;
         enemy.Step(1f);
         Assert.That(enemy.transform.localPosition.z - original,
