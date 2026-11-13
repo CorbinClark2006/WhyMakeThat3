@@ -306,8 +306,8 @@ public sealed class ConvoyCoopTests
             "Both players independently completed the reload route.");
         yield return Wait(() => CountSound(second.network.World, beforeLoad, ConvoyPrototype.Sound.Load) == 2,
             "Both successful insertions replicate exactly one insert sound each.");
-        Assert.That(first.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(3));
-        Assert.That(second.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(3),
+        Assert.That(first.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(4));
+        Assert.That(second.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(4),
             "A cloned peer must reuse its audio sources rather than double the loops.");
 
         first.RegisterRam(1);

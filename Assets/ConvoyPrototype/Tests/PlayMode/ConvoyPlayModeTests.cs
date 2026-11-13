@@ -201,7 +201,7 @@ public sealed class ConvoyPlayModeTests
         Assert.That(engine.isPlaying || wind.isPlaying, Is.False);
         game.SetPaused(false);
         yield return null;
-        Assert.That(game.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(3));
+        Assert.That(game.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(4));
         Assert.That(engine.isPlaying && wind.isPlaying, Is.True);
         for (int i = 0; i < 5; i++) game.RegisterRam(1);
         Assert.That(engine.isPlaying || wind.isPlaying, Is.False, "Van shutdown stops both loops immediately.");
@@ -449,6 +449,35 @@ public sealed class ConvoyPlayModeTests
         Assert.That(game.DistanceTravelled, Is.GreaterThan(distance));
         Assert.That(game.Health, Is.EqualTo(2));
         Assert.That(game.ShotsAvailable, Is.EqualTo(4));
+    }
+
+    [UnityTest]
+    public IEnumerator MusicLoopsFromHomeThroughRolePauseAndWrapWithoutDuplicateSources()
+    {
+        Object.Destroy(game.gameObject);
+        yield return SceneManager.LoadSceneAsync("ConvoyPrototype");
+        yield return null;
+        game = Object.FindAnyObjectByType<ConvoyPrototype>();
+        var music = game.transform.Find("Convoy music").GetComponent<AudioSource>();
+        Assert.That(music.clip.name, Is.EqualTo("BeepBeep"));
+        Assert.That(music.clip.length, Is.InRange(59f, 61f));
+        Assert.That(music.loop, Is.True);
+        Assert.That(music.spatialBlend, Is.Zero);
+        Assert.That(music.volume, Is.EqualTo(0.3f));
+        Assert.That(game.ChoosingRole, Is.True);
+        Assert.That(music.isPlaying, Is.True, "Music starts on the untouched home screen.");
+        yield return null;
+        music.time = 5f;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Gunner);
+        game.SetPaused(true);
+        yield return new WaitForSeconds(0.25f);
+        Assert.That(music.isPlaying, Is.True);
+        Assert.That(music.time, Is.GreaterThan(5f), "Pause and role selection must not restart or stop the soundtrack.");
+        music.time = music.clip.length - 0.1f;
+        yield return new WaitForSeconds(0.4f);
+        Assert.That(music.isPlaying, Is.True);
+        Assert.That(music.time, Is.LessThan(1f), "The actual imported song must wrap at its end.");
+        Assert.That(game.GetComponentsInChildren<AudioSource>().Length, Is.EqualTo(4));
     }
 
     [UnityTest]

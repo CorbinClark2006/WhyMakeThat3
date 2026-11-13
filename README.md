@@ -31,6 +31,15 @@ Addie Johnson (lead art/2D art/3D modeling), Carter Scott (2D art/3D modeling)
 and Roman Keliiholokai (music). **Back** returns to the home screen without
 starting a game.
 
+**Beep Beep** loops at 30% volume from the home screen through credits, lobby,
+gameplay and pause, independently of engine/wind/effects. Browsers may require
+the first click to unlock audio. The original
+[beep beep.m4a](Assets/Game%20Assets/sound_effects/beep%20beep.m4a) is retained;
+[BeepBeep.wav](Assets/ConvoyPrototype/Resources/BeepBeep.wav) is its PCM
+import copy because Unity does not import this M4A as an AudioClip. Each game
+instance owns one music source; entering a role or co-op replay does not restart
+it or create another loop.
+
 ### Two-player browser co-op
 
 Both players open **https://corbinclark2006.github.io/WhyMakeThat3/** on a

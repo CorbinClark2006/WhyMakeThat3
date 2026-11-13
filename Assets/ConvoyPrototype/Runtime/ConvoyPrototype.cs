@@ -72,7 +72,7 @@ namespace Convoy
         public int ShotsAvailable { get; private set; } = ShotsPerPack;
         public Material metal, dark, dirt, grass, foliage, orange, cyan, glass, rubber;
         [System.NonSerialized]
-        public AudioClip engineSound, windSound, fireSound, impactSound, pickupSound, loadSound;
+        public AudioClip engineSound, windSound, fireSound, impactSound, pickupSound, loadSound, musicSound;
         public enum Sound { Fire = 1, Impact = 2, Pickup = 3, Load = 4 }
 
         public const float SegmentLength = 24f;
@@ -122,7 +122,7 @@ namespace Convoy
         private float healthDisplayAge = 6f;
         private bool pausedForFocus;
         private bool showingCredits;
-        private AudioSource audioSource, engineAudio, windAudio;
+        private AudioSource audioSource, engineAudio, windAudio, musicAudio;
         private SpriteRenderer chargeDigits;
         private Sprite chargeSprite;
         private Texture2D chargeTexture;
@@ -156,8 +156,9 @@ namespace Convoy
                 return;
             }
             sounds.AssignTo(this);
+            musicSound = Resources.Load<AudioClip>("BeepBeep");
             if (engineSound == null || windSound == null || fireSound == null || impactSound == null ||
-                pickupSound == null || loadSound == null)
+                pickupSound == null || loadSound == null || musicSound == null)
             {
                 Debug.LogError("Convoy audio is incomplete. Run Tools > Convoy > Configure Browser Multiplayer.", this);
                 enabled = false;
@@ -166,6 +167,9 @@ namespace Convoy
             audioSource = CreateAudioSource("Convoy effects", null, 0.8f);
             engineAudio = CreateAudioSource("Convoy engine", engineSound, 0.35f);
             windAudio = CreateAudioSource("Convoy wind", windSound, 0.2f);
+            musicAudio = CreateAudioSource("Convoy music", musicSound, 0.3f);
+            musicAudio.ignoreListenerPause = true;
+            musicAudio.Play();
             PrototypeGeometry.BuildDriverStation(this);
             PrototypeGeometry.BuildAccelerator(this);
             PrototypeGeometry.BuildRoadRocks(this);
@@ -364,6 +368,7 @@ namespace Convoy
         private void OnDisable()
         {
             StopAudio();
+            if (musicAudio != null) musicAudio.Stop();
             Cursor.lockState = CursorLockMode.None;
             Cursor.visible = true;
         }

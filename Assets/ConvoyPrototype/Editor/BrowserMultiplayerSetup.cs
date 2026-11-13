@@ -49,6 +49,18 @@ public static class BrowserMultiplayerSetup
         sounds.impact = LoadSound("van_hit.mp3");
         sounds.pickup = LoadSound("pickup_soundeffect.wav");
         sounds.load = LoadSound("insert_amo.mp3");
+        const string musicPath = "Assets/ConvoyPrototype/Resources/BeepBeep.wav";
+        var music = AssetDatabase.LoadAssetAtPath<AudioClip>(musicPath);
+        if (music == null) throw new System.InvalidOperationException("Missing Beep Beep soundtrack.");
+        var musicImporter = (AudioImporter)AssetImporter.GetAtPath(musicPath);
+        var musicSettings = musicImporter.defaultSampleSettings;
+        if (!musicSettings.preloadAudioData || musicSettings.loadType != AudioClipLoadType.DecompressOnLoad)
+        {
+            musicSettings.preloadAudioData = true;
+            musicSettings.loadType = AudioClipLoadType.DecompressOnLoad;
+            musicImporter.defaultSampleSettings = musicSettings;
+            musicImporter.SaveAndReimport();
+        }
         sounds.AssignTo(game);
         EditorUtility.SetDirty(sounds);
     }
