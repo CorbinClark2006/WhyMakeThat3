@@ -5,7 +5,7 @@ namespace Convoy
 {
     public struct ConvoyWorldState : INetworkStruct
     {
-        public float Distance, Steering, Cooldown, HitMarker, Flash, HealthAge, ShotKick;
+        public float SurvivalTime, Distance, Steering, Cooldown, HitMarker, Flash, HealthAge, ShotKick;
         public float Yaw, Pitch, Roll, RollVelocity, SpawnTimer;
         public Vector3 RigOffset, RigVelocity;
         public int Rams, Destroyed, SpawnIndex;

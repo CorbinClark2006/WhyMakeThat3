@@ -5,7 +5,7 @@ namespace Convoy
 {
     public sealed class ConvoyNetworkEntity : NetworkBehaviour
     {
-        public enum EntityKind { Enemy = 1, Ammo = 2, Rock = 3 }
+        public enum EntityKind { Enemy = 1, Ammo = 2, Rock = 3, Bush = 4 }
         [Networked] public int Kind { get; set; }
         [Networked] public ConvoyEnemyState Enemy { get; set; }
         [Networked] public ConvoyAmmoState Pack { get; set; }
@@ -41,6 +41,9 @@ namespace Convoy
                         break;
                     case EntityKind.Rock:
                         visual = game.roadRocks.SpawnRock(Mathf.RoundToInt(RockPosition.x / 4.8f), RockPosition.z).gameObject;
+                        break;
+                    case EntityKind.Bush:
+                        visual = game.roadRocks.SpawnBush(Mathf.RoundToInt(RockPosition.x / 4.8f), RockPosition.z).gameObject;
                         break;
                     default:
                         Debug.LogError("Unknown convoy network entity type: " + Kind, this);

@@ -8,6 +8,12 @@ namespace Convoy
         public const float SpawnDistance = 140f;
         public const float Spacing = 300f;
         public const float RockHeight = 2.2f;
+        public const float BushHeight = 1.8f;
+        public const int HazardLimit = 8;
+        public const int BushSpriteIndex = 5;
+        public float CurrentSpacing => Mathf.Max(Spacing / (1f + game.DifficultyStage * 0.25f),
+            game.CruiseSpeed * 5f);
+        public float CurrentSpawnDistance => Mathf.Max(SpawnDistance, game.CruiseSpeed * 6.5f);
         public ConvoyPrototype game;
         public readonly List<Transform> Rocks = new List<Transform>();
         private float travelSinceSpawn;
@@ -24,18 +30,32 @@ namespace Convoy
 
         public Transform SpawnRock(int lane, float z)
         {
+            return SpawnObstacle(lane, z, false);
+        }
+
+        public Transform SpawnBush(int lane, float z)
+        {
+            return SpawnObstacle(lane, z, true);
+        }
+
+        public bool IsBush(Transform obstacle) =>
+            obstacle.GetComponent<SpriteRenderer>().sprite == game.natureSprites[BushSpriteIndex];
+
+        private Transform SpawnObstacle(int lane, float z, bool bush)
+        {
             if (!game.RoadHazardsEnabled)
-                throw new System.InvalidOperationException("Road rocks are only enabled in Player 2 practice.");
+                throw new System.InvalidOperationException("Road obstacles are only enabled in driver practice or online co-op.");
             if (lane < -1 || lane > 1)
                 throw new System.ArgumentOutOfRangeException(nameof(lane));
-            if (game.natureSprites == null || game.natureSprites.Length < 2 || game.natureSprites[1] == null ||
+            int spriteIndex = bush ? BushSpriteIndex : 1;
+            if (game.natureSprites == null || game.natureSprites.Length <= spriteIndex || game.natureSprites[spriteIndex] == null ||
                 game.natureMaterial == null)
-                throw new System.InvalidOperationException("Assign the road rock sprite and unlit nature material.");
-            Sprite sprite = game.natureSprites[1];
-            Transform rock = new GameObject("Road obstacle rock").transform;
+                throw new System.InvalidOperationException("Assign the road obstacle sprites and unlit nature material.");
+            Sprite sprite = game.natureSprites[spriteIndex];
+            Transform rock = new GameObject(bush ? "Road obstacle bush" : "Road obstacle rock").transform;
             rock.SetParent(game.transform, false);
             rock.localPosition = new Vector3(lane * 4.8f, -0.02f, z);
-            rock.localScale = Vector3.one * (RockHeight / sprite.bounds.size.y);
+            rock.localScale = Vector3.one * ((bush ? BushHeight : RockHeight) / sprite.bounds.size.y);
             SpriteRenderer renderer = rock.gameObject.AddComponent<SpriteRenderer>();
             renderer.sprite = sprite;
             renderer.sharedMaterial = game.natureMaterial;
@@ -74,13 +94,19 @@ namespace Convoy
                     RemoveRock(i);
             }
             travelSinceSpawn += travel;
-            while (travelSinceSpawn >= Spacing)
+            float spacing = CurrentSpacing;
+            if (travelSinceSpawn >= spacing)
             {
-                travelSinceSpawn -= Spacing;
-                int lane = spawnIndex++ % 3 - 1;
-                float z = SpawnDistance - travelSinceSpawn;
-                if (z >= -25f)
-                    SpawnRock(lane, z);
+                float overdue = travelSinceSpawn - spacing;
+                travelSinceSpawn %= spacing;
+                // Skip missed spawns after a hitch instead of creating a burst across all lanes.
+                if (overdue >= spacing || Rocks.Count >= HazardLimit)
+                    return;
+                int index = spawnIndex++;
+                int lane = index % 3 - 1;
+                float z = CurrentSpawnDistance - overdue;
+                if (z > game.van.localPosition.z + game.CruiseSpeed * 5f)
+                    SpawnObstacle(lane, z, game.DifficultyStage > 0 && index % 2 == 1);
             }
         }
 

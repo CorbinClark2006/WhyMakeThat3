@@ -78,6 +78,36 @@ public sealed class ConvoyPlayModeTests
     }
 
     [UnityTest]
+    public IEnumerator DifficultyActualUpdateSpawnsExtraChasersAtMinuteBoundaryAndRespectsCap()
+    {
+        game.player.enabled = false;
+        game.AdvanceDifficulty(59f);
+        Assert.That(game.DifficultyStage, Is.Zero);
+        yield return new WaitForSeconds(1.2f);
+        Assert.That(game.DifficultyStage, Is.EqualTo(1));
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed * 1.1f).Within(0.001f));
+        for (int i = 0; i < 4; i++)
+        {
+            ConvoyWorldState state = game.CaptureWorld();
+            state.SpawnTimer = 0f;
+            game.ApplyWorld(state);
+            yield return null;
+            yield return null;
+        }
+        Assert.That(game.Pursuers.Count, Is.EqualTo(3), "Actual Update must add the third van at difficulty two.");
+        game.AdvanceDifficulty(600f);
+        for (int i = 0; i < 10; i++)
+        {
+            ConvoyWorldState state = game.CaptureWorld();
+            state.SpawnTimer = 0f;
+            game.ApplyWorld(state);
+            yield return null;
+            yield return null;
+        }
+        Assert.That(game.Pursuers.Count, Is.EqualTo(ConvoyPrototype.PursuerLimit));
+    }
+
+    [UnityTest]
     public IEnumerator DriverRoadRockActualUpdateHitsOnceAndSteeringAvoidsNextRock()
     {
         game.showRoleSelection = true;

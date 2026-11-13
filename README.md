@@ -83,6 +83,38 @@ SDK's reliable-data callback sender argument or RPCs. The world owner validates
 roles, interaction reach, ammunition, cooldown, and finite/bounded player poses.
 This is cooperative prototype networking, not a competitive anti-cheat system.
 
+### Endless survival difficulty
+
+The first minute retains the easier starting tuning. Every **60 seconds of
+active survival** raises the difficulty stage:
+
+- Cruise speed adds **10% of the starting speed per stage** (23, 25.3, 27.6 m/s,
+  and so on). Speed continues increasing instead of reaching a fixed maximum.
+- The chaser limit grows by one per stage, up to **eight simultaneous vans**.
+  Arrival spacing shortens from 16 seconds using `16 / (1 + 0.25 * stage)`,
+  with a 2.5-second minimum. Chasers' relative approach speed scales with cruise
+  speed and stage pressure, so they still catch the accelerating van. Warnings
+  and retreat times shorten, but keep 1.2-second and two-second minimums.
+- Driver practice and co-op increase road-obstacle frequency. After the first
+  minute, rocks alternate with **1.8-meter bush/grass clumps** using the existing
+  `funky_grass_2` pixel art. Both types damage the van and loosen the accelerator
+  rock exactly once on impact. Spawned obstacles cycle lanes one at a time;
+  there are never rows blocking every lane.
+- Road spacing is at least **five seconds of cruise travel**, spawn visibility
+  is at least 6.5 seconds, and at most eight road obstacles are active. Missed
+  spawns after a long hitch are skipped rather than replayed as a burst. These
+  object/reaction-time limits protect smoothness while cruise speed and chaser
+  pressure keep increasing.
+
+The HUD shows survival time, difficulty, and speed. Online players share one
+authority-owned clock, including after an authority transfer; local pause/tab
+switching and one player's respawn do not stop it. Local practice freezes its
+clock during pause and respawn. A displaced accelerator rock stops road travel,
+not the survival clock; repairing it restores the **current difficulty's**
+cruise speed. Van shutdown freezes the score; a fresh round resets difficulty.
+Local gunner practice still has no road obstacles and driver practice still
+has no chasers.
+
 ### Local practice and controls
 
 On Play, choose **Player 1 - Railgun** for the existing local chase or **Player 2 - Driving practice**. Driver practice has no chasing vans and starts on the driver's seat. Hold **right-click** within reach of the steering wheel to switch to a driving view above and behind the hood at van-local `(0, 2.4, 4.35)`, looking down eight degrees so the hood remains visible across the lower foreground; hold **A/D** to steer smoothly across the three-lane road. The 48 scrolling road tiles extend more than 900 meters ahead, with a 1,000-meter camera clipping distance. Existing authored tiles are preserved and extended rather than rebuilding the van or cargo. Releasing right-click immediately restores the third-person camera and WASD walking. Forward speed stays automatic, and lateral steering stops when the van reaches either road edge. Escape/focus pauses release the wheel. The main imported truck remains intact; a separate graybox steering wheel marks the interaction point.
@@ -115,7 +147,7 @@ For smooth scrolling, field props are baked into nine meshes per road tile (432 
 
 Player 2 driving practice and online co-op have sparse road-rock obstacles; local Player 1's chase does not. The first 2.2-meter-tall rock appears 140 meters ahead in the middle lane; another appears after each 300 meters of travel (about 13 seconds at normal speed), cycling lanes and leaving the other lanes open. Hold right-click at the wheel and steer with A/D to avoid them. Rocks scroll at the actual road speed and stop with the accelerator. Local practice freezes them during pause/respawn; online play does not. A swept ground footprint checks contact against the van damage hitbox, so fast frames cannot pass through an obstacle. Each rock damages the van exactly once, using the same health loss, impact feedback, suspension bump, and accelerator loosening as a pursuer ram. A hit removes that obstacle; avoided rocks disappear behind the van. Five total hits still shut the van down.
 
-- The easier chase starts with one van 65 meters behind, allows at most two pursuers, and adds another no sooner than every 16 seconds. Vans approach at 4.5 m/s, maintain a following gap, warn for 2.5 seconds before a slower 3 m/s ram, then retreat for six seconds before approaching again.
+- The first-minute chase starts with one van 65 meters behind, allows at most two pursuers, and adds another no sooner than every 16 seconds. Vans initially approach at 4.5 m/s, maintain a following gap, warn for 2.5 seconds before a slower 3 m/s ram, then retreat for six seconds before approaching again. Endless survival difficulty increases that pressure each minute.
 - A ram must contact the main van's damage hitbox. It removes one of five health indicators, briefly flashes the screen, rocks the suspension, and pushes an unmounted occupant away from the struck side: a left-side hit pushes right, and a right-side hit pushes left. The larger health display drops into the top center on each hit, stays visible for five seconds after the latest hit, then fades out over 0.6 seconds. It starts hidden. The damage flash also fades instead of persisting. Falling below van-local y = -0.5 through the floor opening shows **Respawn** and a three-second countdown over black, then restores the scene's initial player position and rotation and fades the view in over 0.6 seconds. Fall velocity and impact motion reset, carried ammo drops without loading, and the chase pauses during the countdown so the van cannot take unattended damage. Escape/focus pauses also pause the countdown. Respawning does not reset van health or cannon ammo.
 - The fifth ram shuts down the main van: scrolling, walking, spawning, enemy movement, and combat stop, the gun dismounts, and the view darkens. Press **R** to reload the scene and restore all five health indicators.
 - The driver footwell has an accelerator and a decorative brake pedal (the brake has no gameplay behavior). A rock initially holds the accelerator down at normal road speed. Each ram shifts the rock toward the pedal edge; the third ram knocks it onto the nearby solid footwell floor and shows **! Rock off accelerator**. Road/scenery movement and distance travelled slow smoothly to a complete stop over **15 seconds**, but walking, interactions, and railgun combat remain available. Either selected role can approach with empty hands and a clear path, press **E** to carry the rock, then press **E** near the accelerator to seat it again. Normal speed returns over **five seconds**, the warning clears immediately, and the rock's three-hit looseness resets. Van health and railgun ammo do not reset. Steering scales with current speed and cannot slide a stopped van sideways. Pause and fall recovery freeze the speed transition; releasing a carried rock on pause, death, or respawn returns it to its recoverable footwell position. This is intentionally a bounded, animated prop rather than an unrestricted physics object that can become lost through the floor opening.

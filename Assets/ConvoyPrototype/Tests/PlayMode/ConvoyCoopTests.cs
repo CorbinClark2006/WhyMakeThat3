@@ -116,6 +116,21 @@ public sealed class ConvoyCoopTests
         Assert.That(second.ShotsAvailable, Is.EqualTo(10));
         Assert.That(second.accelerator.NeedsRock, Is.False);
         Assert.That(first.Pursuers.Count, Is.EqualTo(second.Pursuers.Count), "Authority handoff must not duplicate entities.");
+        second.AdvanceDifficulty(60f);
+        yield return Wait(() => first.DifficultyStage == 1 && second.DifficultyStage == 1,
+            "Difficulty elapsed time must replicate after authority handoff.");
+        Assert.That(first.CruiseSpeed, Is.EqualTo(second.CruiseSpeed).Within(0.001f));
+        Assert.That(second.CurrentPursuerLimit, Is.EqualTo(3));
+        float sharedTime = first.SurvivalTime;
+        first.SetPaused(true);
+        first.AdvanceDifficulty(600f);
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(first.SurvivalTime, Is.GreaterThan(sharedTime));
+        Assert.That(first.DifficultyStage, Is.EqualTo(1), "A replica must not advance the shared clock itself.");
+        first.SetPaused(false);
+        second.roadRocks.SpawnBush(-1, 120f);
+        yield return Wait(() => first.roadRocks.Rocks.Exists(rock => first.roadRocks.IsBush(rock)),
+            "Road bushes must replicate with their own sprite, not turn into rocks.");
     }
 
     private static void Aim(ConvoyPrototype game, PursuerVan target)

@@ -58,17 +58,18 @@ namespace Convoy
                     // A falling-back leader pushes its queue back instead of passing through it.
                     p.z = Mathf.MoveTowards(p.z, targetZ,
                         dt * (targetZ < p.z ? Mathf.Max(14f, game.CurrentSpeed) :
-                            KnockbackSpeed > 0f ? 0f : SlowRemaining > 0f ? 1.5f : ApproachSpeed));
+                            KnockbackSpeed > 0f ? 0f : SlowRemaining > 0f ? 1.5f * game.SpeedMultiplier :
+                            ApproachSpeed * game.SpeedMultiplier * game.ChasePressure));
                     if (SlowRemaining <= 0f && Mathf.Abs(p.z + 0.25f) < 0.01f && Mathf.Abs(targetZ + 0.25f) < 0.01f)
                         EnterState(ChaseState.Telegraphing);
                     break;
                 case ChaseState.Telegraphing:
                     p.x = Side * (4.8f + Mathf.Sin(timer * 16f) * 0.08f);
-                    if (timer >= TelegraphDuration)
+                    if (timer >= Mathf.Max(1.2f, TelegraphDuration / game.ChasePressure))
                         EnterState(ChaseState.Ramming);
                     break;
                 case ChaseState.Ramming:
-                    p.x = Mathf.MoveTowards(p.x, Side * ContactX, dt * 3f);
+                    p.x = Mathf.MoveTowards(p.x, Side * ContactX, dt * Mathf.Min(6f, 3f * game.ChasePressure));
                     if (!ramDelivered && Mathf.Abs(p.x) <= ContactX + 0.01f && game.TryRegisterRam(this, p))
                     {
                         ramDelivered = true;
@@ -78,8 +79,9 @@ namespace Convoy
                     }
                     break;
                 case ChaseState.Retreating:
-                    p = Vector3.Lerp(retreatStart, new Vector3(Side * 4.8f, 0f, retreatZ), Mathf.Clamp01(timer / RetreatDuration));
-                    if (timer >= RetreatDuration)
+                    float retreatDuration = Mathf.Max(2f, RetreatDuration / game.ChasePressure);
+                    p = Vector3.Lerp(retreatStart, new Vector3(Side * 4.8f, 0f, retreatZ), Mathf.Clamp01(timer / retreatDuration));
+                    if (timer >= retreatDuration)
                     {
                         ramDelivered = false;
                         EnterState(ChaseState.Approaching);

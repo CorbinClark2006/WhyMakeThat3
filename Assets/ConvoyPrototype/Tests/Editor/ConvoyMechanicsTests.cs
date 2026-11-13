@@ -48,6 +48,119 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
+    public void DifficultyChangesExactlyOnEachMinuteAndKeepsRisingWithObjectLimits()
+    {
+        game.AdvanceDifficulty(59f);
+        game.AdvanceDifficulty(0.99f);
+        Assert.That(game.DifficultyStage, Is.Zero);
+        Assert.That(game.CurrentSpeed, Is.EqualTo(23f));
+        Assert.That(game.CurrentPursuerLimit, Is.EqualTo(2));
+        Assert.That(game.CurrentSpawnInterval, Is.EqualTo(16f));
+        game.AdvanceDifficulty(0.01f);
+        Assert.That(game.DifficultyStage, Is.EqualTo(1));
+        Assert.That(game.CruiseSpeed, Is.EqualTo(25.3f).Within(0.001f));
+        Assert.That(game.CurrentPursuerLimit, Is.EqualTo(3));
+        Assert.That(game.CurrentSpawnInterval, Is.EqualTo(12.8f).Within(0.001f));
+        float speed = game.CruiseSpeed;
+        for (int i = 0; i < 100; i++)
+        {
+            game.AdvanceDifficulty(60f);
+            Assert.That(game.CruiseSpeed, Is.GreaterThan(speed));
+            Assert.That(game.CurrentPursuerLimit, Is.LessThanOrEqualTo(8));
+            Assert.That(game.CurrentSpawnInterval, Is.GreaterThanOrEqualTo(2.5f));
+            Assert.That(game.roadRocks.CurrentSpacing / game.CruiseSpeed, Is.GreaterThanOrEqualTo(4.999f));
+            Assert.That(game.roadRocks.CurrentSpawnDistance / game.CruiseSpeed, Is.GreaterThanOrEqualTo(6.499f));
+            speed = game.CruiseSpeed;
+        }
+        Assert.Throws<System.ArgumentOutOfRangeException>(() => game.AdvanceDifficulty(float.NaN));
+    }
+
+    [Test]
+    public void DifficultyFreezesForLocalPauseSelectionAndDeathAndRepairsRestoreNewCruiseSpeed()
+    {
+        game.showRoleSelection = true;
+        game.AdvanceDifficulty(60f);
+        Assert.That(game.SurvivalTime, Is.Zero);
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        game.SetPaused(true);
+        game.AdvanceDifficulty(60f);
+        Assert.That(game.SurvivalTime, Is.Zero);
+        game.SetPaused(false);
+        game.AdvanceDifficulty(60f);
+        for (int i = 0; i < 3; i++) game.accelerator.RegisterImpact();
+        game.accelerator.Step(15f);
+        Assert.That(game.CurrentSpeed, Is.Zero);
+        game.AdvanceDifficulty(60f);
+        Assert.That(game.DifficultyStage, Is.EqualTo(2), "A broken accelerator must not suspend survival difficulty.");
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2.95f), Quaternion.identity);
+        Assert.That(game.player.TryInteract(), Is.True);
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 3.1f), Quaternion.identity);
+        Assert.That(game.player.TryInteract(), Is.True);
+        game.accelerator.Step(5f);
+        Assert.That(game.CurrentSpeed, Is.EqualTo(game.roadSpeed * 1.2f).Within(0.001f));
+        for (int i = 0; i < 5; i++) game.RegisterRam(1);
+        float elapsed = game.SurvivalTime;
+        game.AdvanceDifficulty(60f);
+        Assert.That(game.SurvivalTime, Is.EqualTo(elapsed));
+        Assert.That(game.CurrentSpeed, Is.Zero);
+    }
+
+    [Test]
+    public void LaterRoadHazardsMixGroundedBushesAndRocksAndBushHitsDamageOnce()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        game.AdvanceDifficulty(60f);
+        Assert.That(game.roadRocks.CurrentSpacing, Is.LessThan(ConvoyRoadRocks.Spacing));
+        for (int index = 0; index < 2; index++)
+        {
+            game.roadRocks.ApplyProgress(new Vector3(game.roadRocks.CurrentSpacing - 1f, index, 1f));
+            game.roadRocks.Step(2f / game.CurrentSpeed);
+            Transform hazard = game.roadRocks.Rocks[game.roadRocks.Rocks.Count - 1];
+            Assert.That(game.roadRocks.IsBush(hazard), Is.EqualTo(index == 1));
+            Assert.That(hazard.localPosition.y, Is.EqualTo(-0.02f));
+            Assert.That(hazard.localPosition.x, Is.EqualTo((index - 1) * 4.8f));
+            Assert.That(hazard.localPosition.z / game.CruiseSpeed, Is.GreaterThan(5f));
+        }
+        Transform bush = game.roadRocks.Rocks[game.roadRocks.Rocks.Count - 1];
+        Assert.That(bush.GetComponent<SpriteRenderer>().sprite.bounds.size.y * bush.localScale.y,
+            Is.EqualTo(ConvoyRoadRocks.BushHeight).Within(0.001f));
+        bush.localPosition = new Vector3(0f, -0.02f, 10f);
+        game.roadRocks.Step(0.6f);
+        Assert.That(game.RamCount, Is.EqualTo(1));
+        Assert.That(game.accelerator.Impacts, Is.EqualTo(1));
+        Assert.That(game.roadRocks.Rocks.Contains(bush), Is.False);
+        game.roadRocks.Step(0.1f);
+        Assert.That(game.RamCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void FasterRoadStillAllowsChasersToCatchUpAndHitchesDoNotSpawnHazardBursts()
+    {
+        PursuerVan enemy = game.SpawnPursuer(-1, -65f);
+        float original = enemy.transform.localPosition.z;
+        enemy.Step(1f);
+        float baseClosing = enemy.transform.localPosition.z - original;
+        game.AdvanceDifficulty(60f);
+        original = enemy.transform.localPosition.z;
+        enemy.Step(1f);
+        Assert.That(enemy.transform.localPosition.z - original,
+            Is.EqualTo(baseClosing * game.SpeedMultiplier * game.ChasePressure).Within(0.001f));
+        game.Pursuers.Remove(enemy);
+        Object.DestroyImmediate(enemy.gameObject);
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        game.van.localPosition += Vector3.right * 4.95f;
+        game.roadRocks.Step(10000f);
+        Assert.That(game.roadRocks.Rocks.Count, Is.Zero, "Do not replay hours of missed spawns after a hitch.");
+        for (int i = 0; i < ConvoyRoadRocks.HazardLimit; i++)
+            game.roadRocks.SpawnRock(1, 500f);
+        game.roadRocks.ApplyProgress(new Vector3(game.roadRocks.CurrentSpacing, 0f, 1f));
+        game.roadRocks.Step(0f);
+        Assert.That(game.roadRocks.Rocks.Count, Is.EqualTo(ConvoyRoadRocks.HazardLimit));
+    }
+
+    [Test]
     public void DriverRoadRocksAreSparseGroundedAndDamageOnceIncludingAccelerator()
     {
         game.showRoleSelection = true;

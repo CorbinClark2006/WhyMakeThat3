@@ -220,7 +220,9 @@ namespace Convoy
             foreach (PursuerVan enemy in Game.Pursuers) Track(enemy.gameObject, ConvoyNetworkEntity.EntityKind.Enemy);
             foreach (ConvoyAmmoPack pack in Game.van.GetComponentsInChildren<ConvoyAmmoPack>())
                 if (!pack.Consumed) Track(pack.gameObject, ConvoyNetworkEntity.EntityKind.Ammo);
-            foreach (Transform rock in Game.roadRocks.Rocks) Track(rock.gameObject, ConvoyNetworkEntity.EntityKind.Rock);
+            foreach (Transform rock in Game.roadRocks.Rocks)
+                Track(rock.gameObject, Game.roadRocks.IsBush(rock) ?
+                    ConvoyNetworkEntity.EntityKind.Bush : ConvoyNetworkEntity.EntityKind.Rock);
         }
 
         private void Track(GameObject visual, ConvoyNetworkEntity.EntityKind kind)
