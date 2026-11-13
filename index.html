@@ -70,13 +70,12 @@
       art.fillStyle = "#cd683d"; art.fillRect(2, 2, 336, 146);
       art.fillStyle = "#2e222f"; art.fillRect(4, 4, 332, 142);
       text(art, "CONVOY", 64, 22, 6, "#fbb954");
-      text(art, "TWO CREW. ONE VAN.", 69, 82, 2, "#f2ec8b");
       art.fillStyle = "#45293f"; art.fillRect(24, 114, 292, 12);
       art.fillStyle = "#fbb954"; art.fillRect(24, 114, Math.floor(292 * progress / 4) * 4, 12);
       text(art, "LOADING " + Math.floor(progress * 100) + "%", 112, 133, 1, "#cd683d");
       document.getElementById("progress-text").textContent = "Loading game " + Math.floor(progress * 100) + "%";
     }
-    text(document.getElementById("brand").getContext("2d"), "CONVOY / SURVIVE TOGETHER", 0, 4, 1, "#fbb954");
+    text(document.getElementById("brand").getContext("2d"), "CONVOY", 0, 4, 1, "#fbb954");
     text(document.getElementById("full-art").getContext("2d"), "FULLSCREEN", 10, 2, 1, "#f2ec8b");
     loading(0);
     function showError(message, type) {
