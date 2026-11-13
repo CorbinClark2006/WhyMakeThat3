@@ -1,0 +1,8 @@
+{
+  "name": "ConvoyPrototype.PlayModeTests",
+  "references": ["ConvoyPrototype.Runtime", "Unity.InputSystem", "Unity.InputSystem.TestFramework", "Fusion.Unity", "Photon.Realtime"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll", "Fusion.Runtime.dll", "Fusion.Common.dll", "Fusion.Realtime.dll", "Fusion.Sockets.dll", "Fusion.Log.dll", "PhotonClient.dll"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}

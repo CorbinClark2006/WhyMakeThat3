@@ -1,0 +1,6 @@
+<linker>
+  <assembly fullname="UnityEngine.PhysicsModule">
+    <!-- Runtime hit/explosion spheres use CreatePrimitive without authored colliders. -->
+    <type fullname="UnityEngine.SphereCollider" preserve="all" />
+  </assembly>
+</linker>

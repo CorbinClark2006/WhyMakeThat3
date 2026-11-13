@@ -1,0 +1,168 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using Convoy;
+using Fusion;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
+using Assert = NUnit.Framework.Assert;
+using Object = UnityEngine.Object;
+
+public sealed class ConvoyCoopTests
+{
+    private readonly List<ConvoyMultiplayer> sessions = new List<ConvoyMultiplayer>();
+    private GameObject clone;
+
+    [UnityTest]
+    [Explicit("Exercises real two-peer Photon gameplay and requires internet access.")]
+    public IEnumerator TwoPeersShareRolesSteeringAmmoDamageRockCombatAndAuthorityHandoff()
+    {
+        yield return SceneManager.LoadSceneAsync("ConvoyPrototype");
+        yield return null;
+        ConvoyPrototype first = Object.FindAnyObjectByType<ConvoyPrototype>();
+        clone = Object.Instantiate(first.gameObject);
+        clone.transform.position = Vector3.right * 2000f;
+        ConvoyPrototype second = clone.GetComponent<ConvoyPrototype>();
+        first.player.enabled = false;
+        second.player.enabled = false;
+        second.player.view.GetComponent<AudioListener>().enabled = false;
+        yield return null;
+        sessions.Add(first.network);
+        sessions.Add(second.network);
+        string code = Guid.NewGuid().ToString("N").Substring(0, 8);
+        first.network.Connect(code, true, ConvoyPrototype.PlayerRole.Gunner);
+        yield return Wait(() => first.network.World != null, "The first peer must create the shared world.");
+        second.network.Connect(code, false, ConvoyPrototype.PlayerRole.Driver);
+        yield return Wait(() => first.network.MatchReady && second.network.MatchReady &&
+            first.otherPlayer != null && second.otherPlayer != null, "Both peers must receive exclusive roles.");
+        Assert.That(first.Role, Is.EqualTo(ConvoyPrototype.PlayerRole.Gunner));
+        Assert.That(second.Role, Is.EqualTo(ConvoyPrototype.PlayerRole.Driver));
+        Assert.That(first.network.World.Gunner, Is.EqualTo(first.network.Runner.LocalPlayer));
+        Assert.That(first.network.World.Driver, Is.EqualTo(second.network.Runner.LocalPlayer));
+        yield return Wait(() => first.Pursuers.Count > 0 && second.Pursuers.Count > 0 &&
+            first.roadRocks.Rocks.Count > 0 && second.roadRocks.Rocks.Count > 0,
+            "Chasers and road hazards must exist in the same combined match.");
+
+        Assert.That(second.player.MountDriver(), Is.True);
+        second.network.SteeringInput = 1f;
+        yield return Wait(() => first.SteeringOffset > 4.8f && second.SteeringOffset > 4.8f,
+            "The driver's input must steer the van seen by the gunner.");
+        second.player.DismountDriver();
+        second.network.SteeringInput = 0f;
+        float distance = first.DistanceTravelled;
+        first.SetPaused(true);
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(first.DistanceTravelled, Is.GreaterThan(distance), "A local pause must not pause the shared world.");
+        first.SetPaused(false);
+
+        first.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        second.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        first.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        yield return Wait(() => first.player.CarriedAmmo != null && second.player.CarriedAmmo != null &&
+            first.otherPlayer.CarriedAmmo != null, "Both players must receive distinct shared batteries.");
+        Assert.That(first.player.CarriedAmmo, Is.Not.SameAs(first.otherPlayer.CarriedAmmo));
+        first.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
+        second.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
+        first.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        yield return Wait(() => first.ShotsAvailable == 12 && second.ShotsAvailable == 12 &&
+            first.player.CarriedAmmo == null && second.player.CarriedAmmo == null,
+            "Either role must reload the same authoritative gun without duplicating ammo.");
+
+        first.RegisterRam(1);
+        first.RegisterRam(-1);
+        first.RegisterRam(1);
+        first.accelerator.Step(15f);
+        yield return Wait(() => second.Health == 2 && second.accelerator.NeedsRock &&
+            second.CurrentSpeed < 0.001f, "Shared damage must dislodge the same accelerator rock and stop both worlds.");
+        second.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2.95f), Quaternion.identity);
+        second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        yield return Wait(() => second.player.CarryingRock && first.otherPlayer.CarryingRock,
+            "The remote driver must acquire the single shared rock.");
+        first.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2.95f), Quaternion.identity);
+        first.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        yield return new WaitForSeconds(0.15f);
+        Assert.That(first.player.CarryingRock, Is.False, "A carried rock cannot be acquired by the other player.");
+        second.player.SetSpawn(new Vector3(-0.9f, 0.214f, 3.1f), Quaternion.identity);
+        second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
+        yield return Wait(() => !first.accelerator.NeedsRock && !second.accelerator.NeedsRock,
+            "The driver must place the shared rock back on the pedal.");
+        first.accelerator.Step(5f);
+        yield return Wait(() => Mathf.Abs(second.CurrentSpeed - second.roadSpeed) < 0.001f,
+            "Both worlds must recover normal speed.");
+
+        first.player.SetSpawn(new Vector3(0.9f, 0.82f, -1.35f), Quaternion.identity);
+        Assert.That(first.player.Mount(), Is.True);
+        PursuerVan target = first.Pursuers[0];
+        Aim(first, target);
+        first.network.World.SendAction(ConvoyNetworkWorld.Action.Fire);
+        yield return Wait(() => target.Hits == 1 && second.Pursuers[0].Hits == 1,
+            "The first railgun hit must damage the same enemy on both peers.");
+        yield return new WaitForSeconds(0.85f);
+        Aim(first, target);
+        first.network.World.SendAction(ConvoyNetworkWorld.Action.Fire);
+        yield return Wait(() => first.DestroyedVans == 1 && second.DestroyedVans == 1 &&
+            first.ShotsAvailable == 10 && second.ShotsAvailable == 10,
+            "Two authoritative shots must destroy the enemy and consume the same ammo.");
+
+        first.network.Runner.SetMasterClient(second.network.Runner.LocalPlayer);
+        yield return Wait(() => !first.network.World.HasStateAuthority && second.network.World.HasStateAuthority,
+            "World authority must hand off to the other peer when needed.");
+        yield return new WaitForSeconds(0.3f);
+        Assert.That(second.Health, Is.EqualTo(2));
+        Assert.That(second.ShotsAvailable, Is.EqualTo(10));
+        Assert.That(second.accelerator.NeedsRock, Is.False);
+        Assert.That(first.Pursuers.Count, Is.EqualTo(second.Pursuers.Count), "Authority handoff must not duplicate entities.");
+    }
+
+    private static void Aim(ConvoyPrototype game, PursuerVan target)
+    {
+        Vector3 direction = target.GetComponentInChildren<Collider>().bounds.center - game.gunCamera.transform.position;
+        direction = game.van.InverseTransformDirection(direction.normalized);
+        game.SetGunAim(Mathf.DeltaAngle(180f, Mathf.Atan2(direction.x, direction.z) * Mathf.Rad2Deg),
+            -Mathf.Asin(direction.y) * Mathf.Rad2Deg);
+    }
+
+    private static IEnumerator Wait(Func<bool> condition, string message)
+    {
+        float deadline = Time.realtimeSinceStartup + 25f;
+        while (!condition() && Time.realtimeSinceStartup < deadline)
+            yield return null;
+        if (!condition())
+        {
+            foreach (ConvoyPrototype game in Object.FindObjectsByType<ConvoyPrototype>(FindObjectsSortMode.None))
+            {
+                Debug.Log("Co-op diagnostic: " + message + " role=" + game.Role +
+                    " health=" + game.Health + " ammo=" + game.ShotsAvailable +
+                    " position=" + game.player.transform.localPosition +
+                    " carrying=" + (game.player.CarriedAmmo != null) +
+                    " remoteCarrying=" + (game.otherPlayer != null && game.otherPlayer.CarriedAmmo != null));
+                foreach (ConvoyAmmoPack pack in game.van.GetComponentsInChildren<ConvoyAmmoPack>())
+                    Debug.Log("Pack: " + pack.transform.position + " carried=" + pack.IsCarried);
+            }
+        }
+        Assert.That(condition(), Is.True, message);
+    }
+
+    [UnityTearDown]
+    public IEnumerator TearDown()
+    {
+        foreach (ConvoyMultiplayer session in sessions)
+        {
+            if (session != null && session.Runner != null)
+            {
+                var task = session.Runner.Shutdown();
+                while (!task.IsCompleted) yield return null;
+                task.GetAwaiter().GetResult();
+            }
+        }
+        sessions.Clear();
+        if (clone != null) Object.Destroy(clone);
+        yield return null;
+        SceneManager.LoadScene("ConvoyPrototype");
+        yield return null;
+    }
+}

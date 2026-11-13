@@ -1,0 +1,6 @@
+{
+  "name": "ConvoyPrototype.Editor",
+  "references": ["ConvoyPrototype.Runtime", "Fusion.Unity", "Fusion.Unity.Editor"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true
+}

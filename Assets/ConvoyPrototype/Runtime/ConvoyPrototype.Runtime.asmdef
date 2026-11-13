@@ -1,0 +1,5 @@
+{
+  "name": "ConvoyPrototype.Runtime",
+  "references": ["Unity.InputSystem", "Fusion.Unity", "Photon.Realtime"],
+  "autoReferenced": true
+}

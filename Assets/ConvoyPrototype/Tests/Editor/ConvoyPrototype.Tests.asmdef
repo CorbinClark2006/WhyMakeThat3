@@ -1,0 +1,7 @@
+{
+  "name": "ConvoyPrototype.Tests",
+  "references": ["ConvoyPrototype.Runtime"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "autoReferenced": false
+}
