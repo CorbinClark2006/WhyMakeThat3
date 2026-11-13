@@ -30,10 +30,10 @@ Both players open **https://corbinclark2006.github.io/WhyMakeThat3/** on a
 desktop browser with keyboard and mouse. No Unity installation or port
 forwarding is needed to play.
 
-1. Choose **Online two-player co-op**.
-2. One player chooses **Player 2 - Driver** and clicks **Create room**.
-3. Share the displayed room code. The other player chooses **Player 1 - Gunner**,
-   enters that code, and clicks **Join code**.
+1. Choose **Play Together**.
+2. One player chooses **Driver** and clicks **Create Room**.
+3. Share the displayed room code. The other player chooses **Gunner**,
+   enters that code, and clicks **Join Room**.
 4. The match starts once both roles are occupied. Roles are exclusive; a player
    who chooses an occupied role can select the other role without reconnecting.
 
@@ -51,8 +51,16 @@ world authority can transfer to the other peer. Falling starts only that
 player's three-second respawn and fade; driving continues. Browsers can suspend
 background tabs entirely, so keep both game tabs visible during play. An actual
 disconnect stops the match until a replacement joins the same room and vacant
-role. After the van shuts down, both players return to local practice from the
-room menu and create/join a new room for another round.
+role.
+
+After the van shuts down, choose **Play Again** without leaving the room. The
+first player to press it chooses **Railgun** or **Driver**; their partner
+automatically receives the remaining role. Both clients reset and acknowledge
+the fresh round before play resumes automatically. Health, ammo, difficulty,
+road obstacles, chasers, supplies, accelerator rock, player positions, and
+crew-manual learning reset together. Either player can choose next round, and
+role selection survives world-authority migration. **Leave room** remains
+available instead of replaying.
 
 Photon Fusion 2.1.4 Shared Mode supplies multiplayer over secure WebSockets;
 GitHub Pages hosts only the static browser build. Rooms are private, limited to
@@ -67,6 +75,10 @@ Co-op**. Install Unity's **WebGL Build Support** module first. The build is save
 to `Build/WebGL`, with gzip decompression fallback for static hosts such as
 Pages. Serve it over HTTP/HTTPS, not by opening its HTML file directly. Photon
 must remain enabled for this App ID in the Photon dashboard.
+The build command selects the custom [Convoy WebGL template](Assets/WebGLTemplates/Convoy/index.html),
+including its matching pixel loading screen, progress indicator, and fullscreen
+control. Refresh both browsers after an update; replay uses application version
+`convoy-web-4` and cannot join rooms from an older cached build.
 The `main` branch holds the editable Unity project; the `gh-pages` branch holds
 the compiled site. Pushing source edits to `main` does not rebuild the website:
 rebuild WebGL and publish the contents of `Build/WebGL` to `gh-pages` to release
@@ -82,6 +94,22 @@ with bounded sequenced command queues and authority acknowledgments, not the
 SDK's reliable-data callback sender argument or RPCs. The world owner validates
 roles, interaction reach, ammunition, cooldown, and finite/bounded player poses.
 This is cooperative prototype networking, not a competitive anti-cheat system.
+`ConvoyCoopTests.ReplayKeepsRoomSwapsRolesResetsEverythingAndSurvivesAuthorityHandoff`
+checks consecutive same-room rounds, competing replay requests, complementary
+roles, full resets, and authority handoff during selection. Replay state remains
+durable Fusion network state, but is marked `UnityNonSerialized`: it is
+initialized for each room, not stored as scene/prefab defaults.
+
+### Pixel interface
+
+Menus, role cards, room-code entry, pause/run reports, replay selection, driving
+dashboard, railgun HUD and physical charge digits, repair warnings, respawn,
+and crew-manual cards share a custom point-filtered 5x7 pixel font and stepped
+panel borders. The palette is amber `#fbb954`, pale yellow `#f2ec8b`, rust
+`#993d41`, copper `#cd683d`, plum `#45293f`, and dark plum `#2e222f`.
+Hover/selected/disabled states and warnings use the same design language.
+The shared UI caches bounded caption textures rather than generating them
+every frame.
 
 ### First-game crew manual
 
@@ -140,7 +168,7 @@ has no chasers.
 
 ### Local practice and controls
 
-On Play, choose **Player 1 - Railgun** for the existing local chase or **Player 2 - Driving practice**. Driver practice has no chasing vans and starts on the driver's seat. Hold **right-click** within reach of the steering wheel to switch to a driving view above and behind the hood at van-local `(0, 2.4, 4.35)`, looking down eight degrees so the hood remains visible across the lower foreground; hold **A/D** to steer smoothly across the three-lane road. The 48 scrolling road tiles extend more than 900 meters ahead, with a 1,000-meter camera clipping distance. Existing authored tiles are preserved and extended rather than rebuilding the van or cargo. Releasing right-click immediately restores the third-person camera and WASD walking. Forward speed stays automatic, and lateral steering stops when the van reaches either road edge. Escape/focus pauses release the wheel. The main imported truck remains intact; a separate graybox steering wheel marks the interaction point.
+On Play, choose **Play Gunner** for the existing local chase or **Play Driver** for driving practice. Driver practice has no chasing vans and starts on the driver's seat. Hold **right-click** within reach of the steering wheel to switch to a driving view above and behind the hood at van-local `(0, 2.4, 4.35)`, looking down eight degrees so the hood remains visible across the lower foreground; hold **A/D** to steer smoothly across the three-lane road. The 48 scrolling road tiles extend more than 900 meters ahead, with a 1,000-meter camera clipping distance. Existing authored tiles are preserved and extended rather than rebuilding the van or cargo. Releasing right-click immediately restores the third-person camera and WASD walking. Forward speed stays automatic, and lateral steering stops when the van reaches either road edge. Escape/focus pauses release the wheel. The main imported truck remains intact; a separate graybox steering wheel marks the interaction point.
 
 A third-person prototype with a tiny, 0.2-meter-tall sprite character inside a full-size van and a close, 0.6-meter follow camera. Jump across cargo boxes, explore the cabin, and defend the open rear doors with a mounted railgun. The van stays near the origin while three road lanes, dividers, and roadside scenery scroll backward.
 

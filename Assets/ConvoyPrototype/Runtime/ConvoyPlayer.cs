@@ -382,6 +382,7 @@ namespace Convoy
             yaw = rotation.eulerAngles.y;
             pitch = 18f;
             verticalVelocity = kickRoll = jumpBuffer = groundGrace = 0f;
+            RespawnRemaining = respawnFadeRemaining = 0f;
             ImpactVelocity = Vector3.zero;
             Physics.SyncTransforms();
             controller.enabled = true;

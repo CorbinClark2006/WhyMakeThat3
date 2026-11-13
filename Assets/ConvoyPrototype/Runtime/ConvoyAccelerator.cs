@@ -113,6 +113,20 @@ namespace Convoy
             rockElapsed = 0.45f;
         }
 
+        public void ResetForRound()
+        {
+            RockOnPedal = true;
+            IsCarried = false;
+            Impacts = 0;
+            SpeedFraction = transitionStart = 1f;
+            transitionElapsed = 0f;
+            rockElapsed = 0.45f;
+            rock.SetParent(game.van, false);
+            InitializeRock();
+            rock.localRotation = Quaternion.identity;
+            pedal.localRotation = Quaternion.identity;
+        }
+
         public ConvoyAcceleratorState CaptureOnline()
         {
             int carrier = rock.parent == game.player.transform ? (int)game.player.Role :

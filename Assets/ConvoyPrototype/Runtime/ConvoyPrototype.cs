@@ -87,6 +87,8 @@ namespace Convoy
         public float HitMarker { get; private set; }
         private ConvoyTutorial tutorial;
         public ConvoyTutorial Tutorial => tutorial ?? (tutorial = new ConvoyTutorial(this));
+        private ConvoyPixelUI pixelUI;
+        public ConvoyPixelUI UI => pixelUI ?? (pixelUI = new ConvoyPixelUI());
 
         public void RecordLesson(ConvoyPlayer actor, ConvoyTutorial.Lesson lesson)
         {
@@ -110,9 +112,10 @@ namespace Convoy
         private bool pausedForFocus;
         private AudioSource audioSource;
         private AudioClip shotSound, crashSound, explosionSound;
-        private GUIStyle respawnStyle;
-        private GUIStyle acceleratorAlertStyle;
-        private GUIStyle difficultyStyle;
+        private SpriteRenderer chargeDigits;
+        private Sprite chargeSprite;
+        private Texture2D chargeTexture;
+        private int displayedCharges = -1;
 
         private struct Transient
         {
@@ -266,6 +269,7 @@ namespace Convoy
             {
                 gunAmmoDisplay.transform.parent.gameObject.SetActive(Mounted && !IsDead);
                 gunAmmoDisplay.text = ShotsAvailable.ToString();
+                UpdateChargeDisplay();
             }
             if (gun == null)
                 return;
@@ -320,7 +324,9 @@ namespace Convoy
 
         private void OnDestroy()
         {
-            tutorial?.Dispose();
+            pixelUI?.Dispose();
+            if (chargeSprite != null) Destroy(chargeSprite);
+            if (chargeTexture != null) Destroy(chargeTexture);
             if (shotSound != null) Destroy(shotSound);
             if (crashSound != null) Destroy(crashSound);
             if (explosionSound != null) Destroy(explosionSound);
@@ -611,108 +617,137 @@ namespace Convoy
 
         private void OnGUI()
         {
-            if (network != null && network.ShowLobby)
-                return;
-            if (player == null || (network != null && network.ShowLobby) || (Paused && !ChoosingRole))
+            if (player == null || (network != null && (network.ShowLobby || (Online && (Paused || IsDead)))))
                 return;
             Matrix4x4 previous = GUI.matrix;
             Color previousColor = GUI.color;
             GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(Screen.width / 1280f, Screen.height / 720f, 1f));
             if (ChoosingRole)
             {
-                GUI.color = new Color(0f, 0f, 0f, 0.85f);
-                GUI.DrawTexture(new Rect(0, 0, 1280, 720), Texture2D.whiteTexture);
-                GUI.color = Color.white;
-                GUIStyle title = new GUIStyle(GUI.skin.label) { alignment = TextAnchor.MiddleCenter, fontSize = 32 };
-                GUI.Label(new Rect(390, 220, 500, 60), "Choose your player", title);
-                GUIStyle button = new GUIStyle(GUI.skin.button) { fontSize = 24 };
-                if (GUI.Button(new Rect(390, 310, 500, 70), "Player 1 - Railgun", button))
+                UI.Backdrop("CREW SELECTION");
+                UI.Center("KEEP THIS VAN ALIVE", new Rect(160, 130, 960, 64), 5, ConvoyPixelUI.Gold);
+                UI.Center("ONE TAKES THE WHEEL. ONE WATCHES YOUR BACK.", new Rect(160, 208, 960, 40));
+                ConvoyPixelUI.Panel(new Rect(248, 284, 368, 232));
+                ConvoyPixelUI.Panel(new Rect(664, 284, 368, 232));
+                UI.VanBadge(384, 310, true);
+                UI.VanBadge(800, 310, false);
+                UI.Center("PLAYER 1 / REAR GUN", new Rect(264, 382, 336, 32), 2, ConvoyPixelUI.Gold);
+                UI.Center("PLAYER 2 / WHEEL", new Rect(680, 382, 336, 32), 2, ConvoyPixelUI.Gold);
+                if (UI.Button(new Rect(264, 428, 336, 68), "PLAY GUNNER", "SOLO CHASE PRACTICE"))
                     SelectRole(PlayerRole.Gunner);
-                if (GUI.Button(new Rect(390, 400, 500, 70), "Player 2 - Driving practice", button))
+                if (UI.Button(new Rect(680, 428, 336, 68), "PLAY DRIVER", "SOLO ROAD PRACTICE"))
                     SelectRole(PlayerRole.Driver);
-                if (network != null && GUI.Button(new Rect(390, 490, 500, 70), "Online two-player co-op", button))
+                if (network != null && UI.Button(new Rect(392, 552, 496, 72), "PLAY TOGETHER", "PRIVATE BROWSER CO-OP ROOM"))
                     network.ShowLobby = true;
                 GUI.color = previousColor;
                 GUI.matrix = previous;
                 return;
             }
-            if (IsDead)
+            if (!Online && (IsDead || Paused))
             {
-                GUI.color = new Color(0f, 0f, 0f, 0.55f);
-                GUI.DrawTexture(new Rect(0, 0, 1280, 720), Texture2D.whiteTexture);
+                UI.Backdrop(IsDead ? "RUN ENDED" : "PRACTICE PAUSED");
+                UI.Center(IsDead ? "END OF THE ROAD" : "CATCH YOUR BREATH",
+                    new Rect(160, 162, 960, 64), 5, ConvoyPixelUI.Gold);
+                UI.Center(IsDead ? "SURVIVED " + SurvivalClock + " / VANS DOWN " + DestroyedVans :
+                    "ONLY LOCAL PRACTICE IS FROZEN.", new Rect(240, 270, 800, 40), 2);
+                if (UI.Button(new Rect(420, 370, 440, 72), IsDead ? "PLAY AGAIN" : "RESUME", IsDead ?
+                    "CHOOSE YOUR ROLE FOR A FRESH RUN" : "BACK TO THE VAN"))
+                {
+                    if (IsDead) SceneManager.LoadSceneAsync(gameObject.scene.path);
+                    else SetPaused(false);
+                }
+                if (!IsDead && UI.Button(new Rect(420, 466, 440, 64), "CHANGE ROLE"))
+                    SceneManager.LoadSceneAsync(gameObject.scene.path);
+                GUI.color = previousColor;
+                GUI.matrix = previous;
+                return;
             }
-            if (difficultyStyle == null)
-                difficultyStyle = new GUIStyle(GUI.skin.label) { fontSize = 20, fontStyle = FontStyle.Bold };
-            GUI.color = new Color(0f, 0f, 0f, 0.75f);
-            GUI.DrawTexture(new Rect(28, 28, 350, 70), Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.Label(new Rect(40, 32, 330, 62),
-                "Survived " + Mathf.FloorToInt(SurvivalTime / 60f).ToString("00") + ":" +
-                Mathf.FloorToInt(SurvivalTime % 60f).ToString("00") + "   Difficulty " + (DifficultyStage + 1) +
-                "\nSpeed " + CurrentSpeed.ToString("0.0") + " m/s", difficultyStyle);
-            GUI.color = new Color(1f, 1f, 1f, DamageFlash * 0.22f);
-            GUI.DrawTexture(new Rect(0, 0, 1280, 720), Texture2D.whiteTexture);
+            ConvoyPixelUI.Panel(new Rect(28, 28, 344, 104));
+            UI.Text("SURVIVED", 44, 42, 2, ConvoyPixelUI.Copper);
+            UI.Text(SurvivalClock, 44, 65, 4, ConvoyPixelUI.Paper);
+            UI.Text("STAGE " + (DifficultyStage + 1), 224, 46, 2, ConvoyPixelUI.Gold);
+            UI.Text(CurrentSpeed.ToString("0.0") + " M/S", 224, 76, 2, ConvoyPixelUI.Paper);
+            float stageProgress = (SurvivalTime % DifficultyInterval) / DifficultyInterval;
+            ConvoyPixelUI.Fill(new Rect(44, 114, 312, 4), ConvoyPixelUI.Plum);
+            ConvoyPixelUI.Fill(new Rect(44, 114, Mathf.Floor(stageProgress * 312 / 4) * 4, 4), ConvoyPixelUI.Gold);
+            ConvoyPixelUI.Fill(new Rect(0, 0, 1280, 720), ConvoyPixelUI.Rust, DamageFlash * 0.24f);
+            UI.Text(Role == PlayerRole.Driver ? "DRIVER / FRONT" : "GUNNER / REAR", 988, 688, 2, ConvoyPixelUI.Paper, 0.8f);
             if (HealthDisplayAlpha > 0f)
             {
                 float y = 28f + HealthDisplayOffset;
-                GUI.color = new Color(0f, 0f, 0f, HealthDisplayAlpha * 0.8f);
-                GUI.DrawTexture(new Rect(464, y, 352, 48), Texture2D.whiteTexture);
+                ConvoyPixelUI.Panel(new Rect(472, y, 336, 68), HealthDisplayAlpha);
+                UI.Text("VAN INTEGRITY", 488, y + 10, 2, ConvoyPixelUI.Paper, HealthDisplayAlpha);
                 for (int i = 0; i < MaximumHealth; i++)
                 {
-                    GUI.color = i < Health ? new Color(1f, 1f, 1f, HealthDisplayAlpha)
-                        : new Color(0.3f, 0.3f, 0.3f, HealthDisplayAlpha);
-                    GUI.DrawTexture(new Rect(476 + i * 68, y + 12, 56, 24), Texture2D.whiteTexture);
+                    ConvoyPixelUI.Fill(new Rect(488 + i * 62, y + 38, 54, 16),
+                        i < Health ? ConvoyPixelUI.Gold : ConvoyPixelUI.Plum, HealthDisplayAlpha);
+                    if (i >= Health) ConvoyPixelUI.Fill(new Rect(500 + i * 62, y + 44, 30, 4), ConvoyPixelUI.Rust, HealthDisplayAlpha);
                 }
             }
             if (Mounted && !IsDead)
             {
-                GUI.color = HitMarker > 0f ? Color.black : Color.white;
-                GUI.DrawTexture(new Rect(622, 359, 12, 2), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(646, 359, 12, 2), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(639, 342, 2, 12), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(639, 366, 2, 12), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(560, 405, 160f * (1f - Cooldown / 0.8f), 3), Texture2D.whiteTexture);
+                Color crosshair = HitMarker > 0f ? ConvoyPixelUI.Gold : ConvoyPixelUI.Paper;
+                ConvoyPixelUI.Fill(new Rect(622, 359, 12, 2), crosshair);
+                ConvoyPixelUI.Fill(new Rect(646, 359, 12, 2), crosshair);
+                ConvoyPixelUI.Fill(new Rect(639, 342, 2, 12), crosshair);
+                ConvoyPixelUI.Fill(new Rect(639, 366, 2, 12), crosshair);
+                ConvoyPixelUI.Fill(new Rect(560, 405, 160, 4), ConvoyPixelUI.Plum);
+                ConvoyPixelUI.Fill(new Rect(560, 405, 160f * (1f - Cooldown / 0.8f), 4), ConvoyPixelUI.Gold);
+                ConvoyPixelUI.Panel(new Rect(994, 558, 254, 112));
+                UI.Text("RAIL CHARGES", 1010, 574, 2, ConvoyPixelUI.Copper);
+                UI.Text(ShotsAvailable.ToString("00"), 1010, 600, 5, ConvoyPixelUI.Gold);
+                UI.Text(ShotsAvailable == 0 ? "RELOAD" : Cooldown > 0 ? "CHARGING" : "READY",
+                    1114, 620, 2, ShotsAvailable == 0 || Cooldown > 0 ? ConvoyPixelUI.Copper : ConvoyPixelUI.Paper);
             }
             else if (!IsDead)
-            {
-                GUI.color = Color.white;
-                GUI.DrawTexture(new Rect(638, 358, 4, 4), Texture2D.whiteTexture);
-            }
+                ConvoyPixelUI.Fill(new Rect(638, 358, 4, 4), ConvoyPixelUI.Paper);
             if (!IsDead && accelerator != null && accelerator.NeedsRock)
             {
-                if (acceleratorAlertStyle == null)
-                    acceleratorAlertStyle = new GUIStyle(GUI.skin.label)
-                    {
-                        alignment = TextAnchor.MiddleCenter,
-                        fontSize = 24,
-                        fontStyle = FontStyle.Bold
-                    };
-                GUI.color = new Color(0f, 0f, 0f, 0.8f);
-                GUI.DrawTexture(new Rect(920, 28, 332, 48), Texture2D.whiteTexture);
-                GUI.color = new Color(1f, 0.75f, 0.2f);
-                GUI.Label(new Rect(920, 28, 332, 48), "!  Rock off accelerator", acceleratorAlertStyle);
+                ConvoyPixelUI.Panel(new Rect(908, 28, 340, 92), 1f, true);
+                ConvoyPixelUI.Fill(new Rect(918, 38, 44, 70), ConvoyPixelUI.Rust);
+                UI.Text("!", 930, 54, 5, ConvoyPixelUI.Gold);
+                UI.Text("THROTTLE LOST", 976, 46, 2, ConvoyPixelUI.Gold);
+                UI.Text("ROCK OFF PEDAL", 976, 76, 2, ConvoyPixelUI.Paper);
             }
             Tutorial.Draw();
             if (player.RespawnFadeAlpha > 0f)
             {
-                GUI.color = new Color(0f, 0f, 0f, player.RespawnFadeAlpha);
-                GUI.DrawTexture(new Rect(0, 0, 1280, 720), Texture2D.whiteTexture);
+                ConvoyPixelUI.Fill(new Rect(0, 0, 1280, 720), ConvoyPixelUI.Ink, player.RespawnFadeAlpha);
                 if (player.IsRespawning)
                 {
-                    if (respawnStyle == null)
-                        respawnStyle = new GUIStyle(GUI.skin.label)
-                        {
-                            alignment = TextAnchor.MiddleCenter,
-                            fontSize = 40,
-                            fontStyle = FontStyle.Bold
-                        };
-                    GUI.color = Color.white;
-                    GUI.Label(new Rect(440, 280, 400, 160),
-                        "Respawn\n" + Mathf.CeilToInt(player.RespawnRemaining), respawnStyle);
+                    UI.Center("BACK ON YOUR FEET", new Rect(240, 240, 800, 50), 4, ConvoyPixelUI.Gold);
+                    UI.Center(Mathf.CeilToInt(player.RespawnRemaining).ToString(),
+                        new Rect(540, 328, 200, 100), 10, ConvoyPixelUI.Paper);
+                    UI.Center(Online ? "YOUR PARTNER KEEPS THE VAN MOVING." : "PRACTICE WAITS FOR YOU.",
+                        new Rect(200, 464, 880, 40), 2, ConvoyPixelUI.Copper);
                 }
             }
             GUI.color = previousColor;
             GUI.matrix = previous;
+        }
+
+        public string SurvivalClock => Mathf.FloorToInt(SurvivalTime / 60f).ToString("00") + ":" +
+            Mathf.FloorToInt(SurvivalTime % 60f).ToString("00");
+
+        private void UpdateChargeDisplay()
+        {
+            if (chargeDigits == null)
+            {
+                gunAmmoDisplay.GetComponent<MeshRenderer>().enabled = false;
+                var digits = new GameObject("Pixel charges");
+                digits.transform.SetParent(gunAmmoDisplay.transform, false);
+                chargeDigits = digits.AddComponent<SpriteRenderer>();
+                chargeDigits.sharedMaterial = natureMaterial;
+                chargeDigits.color = ConvoyPixelUI.Paper;
+            }
+            if (displayedCharges == ShotsAvailable) return;
+            displayedCharges = ShotsAvailable;
+            if (chargeSprite != null) Destroy(chargeSprite);
+            if (chargeTexture != null) Destroy(chargeTexture);
+            chargeTexture = ConvoyPixelUI.Bake(ShotsAvailable.ToString());
+            chargeSprite = Sprite.Create(chargeTexture, new Rect(0, 0, chargeTexture.width, chargeTexture.height),
+                Vector2.one * 0.5f, 155f, 0, SpriteMeshType.FullRect);
+            chargeDigits.sprite = chargeSprite;
         }
 
         public void BeginOnline(PlayerRole role)
@@ -725,6 +760,53 @@ namespace Convoy
             if (role == PlayerRole.Driver)
                 player.SetSpawn(DriverSpawn, Quaternion.identity);
             SetPaused(false);
+        }
+
+        public void ResetRound(PlayerRole role, Vector3 gunnerSpawn, Quaternion gunnerRotation)
+        {
+            SetPaused(true);
+            player.SetNetworkAmmo(null);
+            otherPlayer?.SetNetworkAmmo(null);
+            foreach (PursuerVan enemy in Pursuers)
+                if (enemy != null) RemoveRoundObject(enemy.gameObject);
+            Pursuers.Clear();
+            foreach (Transform obstacle in roadRocks.Rocks)
+                if (obstacle != null) RemoveRoundObject(obstacle.gameObject);
+            roadRocks.Rocks.Clear();
+            foreach (ConvoyAmmoPack pack in van.GetComponentsInChildren<ConvoyAmmoPack>())
+                RemoveRoundObject(pack.gameObject);
+            foreach (Transient effect in effects)
+                if (effect.Object != null) RemoveRoundObject(effect.Object);
+            effects.Clear();
+            ApplyWorld(new ConvoyWorldState { HealthAge = 6f, SpawnTimer = spawnInterval });
+            ShotsAvailable = ShotsPerPack;
+            accelerator.ResetForRound();
+            roadRocks.ApplyProgress(Vector3.zero);
+            Role = role;
+            player.OnlineRole = role;
+            ResetActor(player, role, gunnerSpawn, gunnerRotation);
+            if (otherPlayer != null)
+            {
+                otherPlayer.OnlineRole = role == PlayerRole.Driver ? PlayerRole.Gunner : PlayerRole.Driver;
+                ResetActor(otherPlayer, otherPlayer.OnlineRole, gunnerSpawn, gunnerRotation);
+            }
+            supplyPack = WorldAuthority ? PrototypeGeometry.CreateAmmoPack(this, ammoSupply) : null;
+            Tutorial.Reset();
+        }
+
+        private static void ResetActor(ConvoyPlayer actor, PlayerRole role, Vector3 gunnerSpawn, Quaternion gunnerRotation)
+        {
+            actor.SetSpawn(role == PlayerRole.Driver ? DriverSpawn : gunnerSpawn,
+                role == PlayerRole.Driver ? Quaternion.identity : gunnerRotation);
+            actor.GetComponent<CharacterController>().enabled = actor.IsLocal;
+            PrototypeGeometry.BuildAvatar(actor);
+        }
+
+        private static void RemoveRoundObject(GameObject item)
+        {
+            item.SetActive(false);
+            if (Application.isPlaying) Destroy(item);
+            else DestroyImmediate(item);
         }
 
         public ConvoyWorldState CaptureWorld()

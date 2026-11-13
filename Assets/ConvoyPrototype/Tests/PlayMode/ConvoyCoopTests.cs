@@ -16,6 +16,84 @@ public sealed class ConvoyCoopTests
     private GameObject clone;
 
     [UnityTest]
+    [Explicit("Exercises real two-peer in-room replay and requires internet access.")]
+    public IEnumerator ReplayKeepsRoomSwapsRolesResetsEverythingAndSurvivesAuthorityHandoff()
+    {
+        yield return SceneManager.LoadSceneAsync("ConvoyPrototype");
+        yield return null;
+        ConvoyPrototype first = Object.FindAnyObjectByType<ConvoyPrototype>();
+        clone = Object.Instantiate(first.gameObject);
+        clone.transform.position = Vector3.right * 2000f;
+        ConvoyPrototype second = clone.GetComponent<ConvoyPrototype>();
+        first.player.enabled = second.player.enabled = false;
+        second.player.view.GetComponent<AudioListener>().enabled = false;
+        yield return null;
+        sessions.Add(first.network);
+        sessions.Add(second.network);
+        string room = Guid.NewGuid().ToString("N").Substring(0, 8);
+        first.network.Connect(room, true, ConvoyPrototype.PlayerRole.Gunner);
+        yield return Wait(() => first.network.World != null, "Create the original room.");
+        second.network.Connect(room, false, ConvoyPrototype.PlayerRole.Driver);
+        yield return Wait(() => first.network.MatchReady && second.network.MatchReady, "Both initial roles must join.");
+        var firstRunner = first.network.Runner;
+        var secondRunner = second.network.Runner;
+        for (int round = 1; round <= 3; round++)
+        {
+            ConvoyPrototype authority = first.WorldAuthority ? first : second;
+            authority.AdvanceDifficulty(60f);
+            first.Tutorial.Complete(ConvoyTutorial.Lesson.Jump);
+            second.Tutorial.Complete(ConvoyTutorial.Lesson.Jump);
+            for (int hit = 0; hit < 5; hit++) authority.RegisterRam(hit % 2 == 0 ? 1 : -1);
+            yield return Wait(() => first.IsDead && second.IsDead, "Both browsers must see the same run end.");
+            second.network.World.SendAction(ConvoyNetworkWorld.Action.Replay);
+            yield return Wait(() => first.network.World.ReplayPhase == ConvoyNetworkWorld.ReplayState.ChoosingRole &&
+                second.network.World.ReplayPhase == ConvoyNetworkWorld.ReplayState.ChoosingRole, "Replay opens role choice for both.");
+            Assert.That(first.network.World.ReplayChooser, Is.EqualTo(secondRunner.LocalPlayer));
+            first.network.World.SendAction(ConvoyNetworkWorld.Action.Replay);
+            first.network.World.SendAction(ConvoyNetworkWorld.Action.ReplayDriver);
+            yield return new WaitForSeconds(0.15f);
+            Assert.That(first.network.World.ReplayChooser, Is.EqualTo(secondRunner.LocalPlayer),
+                "A late replay click cannot steal the role picker.");
+            Assert.That(first.network.MatchReady, Is.False);
+            if (round == 2)
+            {
+                firstRunner.SetMasterClient(secondRunner.LocalPlayer);
+                yield return Wait(() => second.WorldAuthority, "Authority can move during role selection.");
+            }
+            second.network.World.SendAction(round % 2 == 1 ?
+                ConvoyNetworkWorld.Action.ReplayGunner : ConvoyNetworkWorld.Action.ReplayDriver);
+            yield return Wait(() => first.network.World.Round == round && second.network.World.Round == round &&
+                first.network.MatchReady && second.network.MatchReady && !first.Paused && !second.Paused,
+                "Both clients must reset and acknowledge before the next round runs.");
+            Assert.That(first.network.Runner, Is.SameAs(firstRunner));
+            Assert.That(second.network.Runner, Is.SameAs(secondRunner));
+            Assert.That(firstRunner.SessionInfo.Name, Is.EqualTo(room.ToUpperInvariant()));
+            Assert.That(second.Role, Is.EqualTo(round % 2 == 1 ? ConvoyPrototype.PlayerRole.Gunner : ConvoyPrototype.PlayerRole.Driver));
+            Assert.That(first.Role, Is.Not.EqualTo(second.Role));
+            Assert.That(first.otherPlayer.Role, Is.EqualTo(second.Role));
+            Assert.That(second.otherPlayer.Role, Is.EqualTo(first.Role));
+            Assert.That(first.Health, Is.EqualTo(5));
+            Assert.That(second.Health, Is.EqualTo(5));
+            Assert.That(first.ShotsAvailable, Is.EqualTo(4));
+            Assert.That(second.ShotsAvailable, Is.EqualTo(4));
+            Assert.That(first.DestroyedVans, Is.Zero);
+            Assert.That(first.DifficultyStage, Is.Zero);
+            Assert.That(first.SurvivalTime, Is.LessThan(2f));
+            Assert.That(second.accelerator.RockOnPedal, Is.True);
+            Assert.That(second.accelerator.Impacts, Is.Zero);
+            Assert.That(second.CurrentSpeed, Is.EqualTo(23f));
+            Assert.That(first.player.CarriedAmmo, Is.Null);
+            Assert.That(first.player.CarryingRock, Is.False);
+            Assert.That(first.player.IsRespawning, Is.False);
+            Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.Jump), Is.False);
+            Assert.That(second.Tutorial.Knows(ConvoyTutorial.Lesson.Jump), Is.False);
+            yield return Wait(() => first.Pursuers.Count == 1 && second.Pursuers.Count == 1 &&
+                first.roadRocks.Rocks.Count == 1 && second.roadRocks.Rocks.Count == 1 &&
+                first.supplyPack != null && second.supplyPack != null, "Fresh enemies, hazards, and one supply replicate once.");
+        }
+    }
+
+    [UnityTest]
     [Explicit("Exercises real two-peer Photon gameplay and requires internet access.")]
     public IEnumerator TwoPeersShareRolesSteeringAmmoDamageRockCombatAndAuthorityHandoff()
     {

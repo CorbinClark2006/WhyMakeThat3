@@ -27,6 +27,7 @@ namespace Convoy
         public override void Spawned()
         {
             game = Runner.GetComponent<ConvoyRunnerLink>().session.Game;
+            game.network.entities.Add(this);
             if (visual == null)
             {
                 switch ((EntityKind)Kind)
@@ -113,6 +114,7 @@ namespace Convoy
             if (previousCarrier != null && previousCarrier.CarriedAmmo == ammo)
                 previousCarrier.SetNetworkAmmo(null);
             if (game == null) return;
+            game.network.entities.Remove(this);
             game.network.World?.Untrack(visual);
             if (enemy != null) game.Pursuers.Remove(enemy);
             if (visual != null)

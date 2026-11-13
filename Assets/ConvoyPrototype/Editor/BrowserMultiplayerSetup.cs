@@ -65,6 +65,7 @@ public static class BrowserMultiplayerSetup
         if (Application.isBatchMode)
             EditorSceneManager.OpenScene("Assets/Scenes/ConvoyPrototype.unity");
         Configure();
+        PlayerSettings.WebGL.template = "PROJECT:Convoy";
         PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
         PlayerSettings.WebGL.decompressionFallback = true;
         string output = Path.GetFullPath("Build/WebGL");

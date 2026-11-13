@@ -48,6 +48,47 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
+    public void ReplayResetClearsDamageSuppliesTimersMotionRespawnAndTutorialWithoutRebuildingScenery()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        Transform roadTile = game.road.GetChild(9);
+        game.player.MountDriver();
+        game.Steer(1f, 1f);
+        game.AdvanceDifficulty(120f);
+        game.ScrollRoad(1f);
+        game.Tutorial.Complete(ConvoyTutorial.Lesson.Jump);
+        game.player.DismountDriver();
+        game.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        Assert.That(game.player.TryInteract(), Is.True);
+        for (int i = 0; i < 5; i++) game.RegisterRam(1);
+        game.ResetRound(ConvoyPrototype.PlayerRole.Gunner, new Vector3(0.9f, 0.82f, -1.35f), Quaternion.Euler(0, 180, 0));
+        Assert.That(game.Health, Is.EqualTo(5));
+        Assert.That(game.ShotsAvailable, Is.EqualTo(4));
+        Assert.That(game.SurvivalTime, Is.Zero);
+        Assert.That(game.SteeringOffset, Is.Zero);
+        Assert.That(game.Cooldown, Is.Zero);
+        Assert.That(game.Pursuers.Count, Is.Zero);
+        Assert.That(game.roadRocks.Rocks.Count, Is.Zero);
+        Assert.That(game.accelerator.Impacts, Is.Zero);
+        Assert.That(game.accelerator.RockOnPedal, Is.True);
+        Assert.That(game.player.CarryingRock, Is.False);
+        Assert.That(game.player.CarriedAmmo, Is.Null);
+        Assert.That(game.player.Mounted, Is.False);
+        Assert.That(game.player.Driving, Is.False);
+        Assert.That(game.Tutorial.Learned, Is.EqualTo(ConvoyTutorial.Lesson.None));
+        Assert.That(game.road.GetChild(9), Is.SameAs(roadTile), "Replay must not rebuild the optimized field scenery.");
+    }
+
+    [TestCase("Survived 01:23", "SURVIVED 01:23")]
+    [TestCase("Partner's role", "PARTNER'S ROLE")]
+    [TestCase("Connection\nclosed", "CONNECTION\nCLOSED")]
+    public void PixelUIRetainsReadableAsciiLabels(string original, string expected)
+    {
+        Assert.That(ConvoyPixelUI.Normalize(original), Is.EqualTo(expected));
+    }
+
+    [Test]
     public void TutorialBatteryRouteUsesRealReachAndRetiresOnlySuccessfulSteps()
     {
         game.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);

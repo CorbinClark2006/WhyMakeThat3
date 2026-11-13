@@ -6,7 +6,8 @@ namespace Convoy
 {
     public sealed class ConvoyNetworkWorld : NetworkBehaviour
     {
-        public enum Action { Interact = 1, Fire = 2, Drop = 3 }
+        public enum Action { Interact = 1, Fire = 2, Drop = 3, Replay = 4, ReplayGunner = 5, ReplayDriver = 6, RoundReady = 7 }
+        public enum ReplayState { Playing, ChoosingRole, Resetting }
         public const int EventCapacity = 32;
         [Networked] public PlayerRef Gunner { get; set; }
         [Networked] public PlayerRef Driver { get; set; }
@@ -21,6 +22,10 @@ namespace Convoy
         [Networked] public int EventSequence { get; set; }
         [Networked, Capacity(EventCapacity)] public NetworkArray<ConvoyEvent> Events => default;
         [Networked] public NetworkBool Started { get; set; }
+        [Networked, UnityNonSerialized] public ReplayState ReplayPhase { get; set; }
+        [Networked, UnityNonSerialized] public PlayerRef ReplayChooser { get; set; }
+        [Networked, UnityNonSerialized] public int Round { get; set; }
+        [Networked, UnityNonSerialized] public int ReadyPlayers { get; set; }
         public bool ExecutingCommand { get; private set; }
         private ConvoyMultiplayer session;
         private readonly HashSet<GameObject> tracked = new HashSet<GameObject>();
@@ -30,6 +35,7 @@ namespace Convoy
         private int lastDriverSequence;
         private int gunnerLessons, driverLessons;
         private float nextDiscovery, steering, lastDriverFrame;
+        private Action pendingRole;
         private ConvoyPrototype Game => session.Game;
 
         public override void Spawned()
@@ -71,7 +77,7 @@ namespace Convoy
                 AssignRole(input, source);
                 int role = source == Gunner ? 1 : source == Driver ? 2 : 0;
                 if (role == 0 || session.PlayerForRole(role) == null) continue;
-                if (AcceptPose(source, input.Pose))
+                if (ReplayPhase == ReplayState.Playing && AcceptPose(source, input.Pose))
                 {
                     if (role == 2 && input.FrameSequence != lastDriverSequence)
                     {
@@ -98,6 +104,18 @@ namespace Convoy
                 }
                 if (role == 1) GunnerProcessed = processed;
                 else DriverProcessed = processed;
+            }
+            if (pendingRole != 0)
+            {
+                BeginReplay(pendingRole == Action.ReplayGunner ? 1 : 2);
+                pendingRole = 0;
+            }
+            session.PrepareRound();
+            if (ReplayPhase == ReplayState.Resetting && ReadyPlayers == 3 && session.RolesPresent)
+            {
+                ReplayPhase = ReplayState.Playing;
+                ReplayChooser = PlayerRef.None;
+                session.ActivateRound();
             }
             if (session.MatchReady && !Started)
             {
@@ -140,6 +158,7 @@ namespace Convoy
         public override void Render()
         {
             session.EnsureActors();
+            session.PrepareRound();
             if (!HasStateAuthority)
             {
                 hadAuthority = false;
@@ -231,7 +250,7 @@ namespace Convoy
                 }
                 finally { ExecutingCommand = false; }
             }
-            if (Time.unscaledTime < nextDiscovery) return;
+            if (ReplayPhase != ReplayState.Playing || Time.unscaledTime < nextDiscovery) return;
             nextDiscovery = Time.unscaledTime + 0.1f;
             foreach (PursuerVan enemy in Game.Pursuers) Track(enemy.gameObject, ConvoyNetworkEntity.EntityKind.Enemy);
             foreach (ConvoyAmmoPack pack in Game.van.GetComponentsInChildren<ConvoyAmmoPack>())
@@ -255,7 +274,9 @@ namespace Convoy
 
         public void SendAction(Action action)
         {
-            if (!session.MatchReady || session.Input == null)
+            bool replayAction = action >= Action.Replay;
+            if (session.Input == null || (!replayAction && !session.MatchReady) ||
+                (replayAction && !session.RolesPresent))
             {
                 session.Report("Wait for both players to join before interacting.");
                 return;
@@ -296,6 +317,13 @@ namespace Convoy
 
         private void Execute(PlayerRef source, ConvoyCommand command)
         {
+            if (command.Action >= (int)Action.Replay)
+            {
+                ExecuteReplay(source, (Action)command.Action);
+                return;
+            }
+            if (ReplayPhase != ReplayState.Playing)
+                return;
             if (!AcceptPose(source, command.Pose)) return;
             ConvoyPlayer actor = session.PlayerForRole(source == Gunner ? 1 : 2);
             ExecutingCommand = true;
@@ -307,6 +335,7 @@ namespace Convoy
                     if (actor.CarryingRock) Game.accelerator.ReleaseRock();
                     return;
                 }
+
                 if (!session.MatchReady || Game.IsDead || actor.IsRespawning)
                 {
                     Message(source, "Controls are unavailable while waiting, respawning, or after van shutdown.");
@@ -326,10 +355,67 @@ namespace Convoy
             finally { ExecutingCommand = false; }
         }
 
+        private void ExecuteReplay(PlayerRef source, Action action)
+        {
+            if (source != Gunner && source != Driver)
+                return;
+            if (action == Action.Replay && Game.IsDead && ReplayPhase == ReplayState.Playing && session.RolesPresent)
+            {
+                ReplayChooser = source;
+                ReplayPhase = ReplayState.ChoosingRole;
+            }
+            else if ((action == Action.ReplayGunner || action == Action.ReplayDriver) &&
+                ReplayPhase == ReplayState.ChoosingRole && source == ReplayChooser && session.RolesPresent)
+                pendingRole = action;
+            else if (action == Action.RoundReady && ReplayPhase == ReplayState.Resetting)
+                ReadyPlayers |= source == Gunner ? 1 : 2;
+            else if (action != Action.Replay)
+                Message(source, "Wait for your partner or the next-round role selection.");
+        }
+
+        private void BeginReplay(int chosenRole)
+        {
+            bool swap = (ReplayChooser == Gunner ? 1 : 2) != chosenRole;
+            foreach (ConvoyNetworkEntity entity in new List<ConvoyNetworkEntity>(session.entities))
+                if (entity.Object != null && entity.HasStateAuthority)
+                    Runner.Despawn(entity.Object);
+            if (swap)
+            {
+                PlayerRef previous = Gunner;
+                Gunner = Driver;
+                Driver = previous;
+                int processed = GunnerProcessed;
+                GunnerProcessed = DriverProcessed;
+                DriverProcessed = processed;
+            }
+            GunnerPose = new ConvoyPlayerState { Position = session.gunnerSpawn,
+                Yaw = session.gunnerRotation.eulerAngles.y, Grounded = true };
+            DriverPose = new ConvoyPlayerState { Position = ConvoyPrototype.DriverSpawn, Grounded = true };
+            gunnerLessons = driverLessons = 0;
+            steering = 0f;
+            lastDriverFrame = 0f;
+            Started = false;
+            ReadyPlayers = 0;
+            Round++;
+            ReplayPhase = ReplayState.Resetting;
+            session.PrepareRound();
+            State = Game.CaptureWorld();
+            Accelerator = Game.accelerator.CaptureOnline();
+            Ammo = Game.ShotsAvailable;
+            RoadProgress = Game.roadRocks.CaptureProgress();
+        }
+
         private void ReconcileDepartedPlayers()
         {
             if (Gunner != PlayerRef.None && !Present(Gunner)) { ReleaseRole(1); Gunner = PlayerRef.None; }
             if (Driver != PlayerRef.None && !Present(Driver)) { ReleaseRole(2); Driver = PlayerRef.None; steering = 0f; }
+            if (ReplayPhase == ReplayState.ChoosingRole && !Present(ReplayChooser))
+                ReplayChooser = Gunner != PlayerRef.None ? Gunner : Driver;
+            if (ReplayPhase == ReplayState.Resetting)
+            {
+                if (Gunner == PlayerRef.None) ReadyPlayers &= ~1;
+                if (Driver == PlayerRef.None) ReadyPlayers &= ~2;
+            }
         }
 
         private bool Present(PlayerRef player)

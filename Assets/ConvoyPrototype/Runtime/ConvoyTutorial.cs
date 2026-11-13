@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Convoy
@@ -36,14 +35,9 @@ namespace Convoy
             }
         }
 
-        private static readonly Color Ink = new Color32(46, 34, 47, 255);
-        private static readonly Color Plum = new Color32(69, 41, 63, 255);
-        private static readonly Color Rust = new Color32(153, 61, 65, 255);
-        private static readonly Color Copper = new Color32(205, 104, 61, 255);
-        private static readonly Color Gold = new Color32(251, 185, 84, 255);
-        private static readonly Color Paper = new Color32(242, 236, 139, 255);
+        private static readonly Color Ink = ConvoyPixelUI.Ink, Plum = ConvoyPixelUI.Plum,
+            Rust = ConvoyPixelUI.Rust, Copper = ConvoyPixelUI.Copper, Gold = ConvoyPixelUI.Gold, Paper = ConvoyPixelUI.Paper;
         private readonly ConvoyPrototype game;
-        private readonly Dictionary<string, Texture2D> lettering = new Dictionary<string, Texture2D>();
         private float walked, looked, steered, previousSteering, refreshRemaining, hintAge, stampRemaining;
         private string stamp = "";
         public Lesson Learned { get; private set; }
@@ -229,13 +223,13 @@ namespace Convoy
             if (stampRemaining > 0f)
             {
                 float alpha = Mathf.Min(1f, stampRemaining / 0.3f);
-                Panel(new Rect(846, 616, 402, 72), alpha);
-                RectFill(new Rect(858, 632, 32, 32), Gold, alpha);
-                RectFill(new Rect(864, 647, 6, 6), Ink, alpha);
-                RectFill(new Rect(870, 653, 6, 6), Ink, alpha);
-                RectFill(new Rect(876, 641, 6, 12), Ink, alpha);
-                Text("LOGGED. YOU HAVE GOT THIS.", 906, 632, 2, Paper, alpha);
-                Text(stamp, 906, 657, 1, Gold, alpha);
+                Panel(new Rect(434, 32, 402, 72), alpha);
+                RectFill(new Rect(446, 48, 32, 32), Gold, alpha);
+                RectFill(new Rect(452, 63, 6, 6), Ink, alpha);
+                RectFill(new Rect(458, 69, 6, 6), Ink, alpha);
+                RectFill(new Rect(464, 57, 6, 12), Ink, alpha);
+                Text("LOGGED. YOU HAVE GOT THIS.", 494, 48, 2, Paper, alpha);
+                Text(stamp, 494, 73, 1, Gold, alpha);
             }
         }
 
@@ -305,85 +299,17 @@ namespace Convoy
 
         private static void Panel(Rect rect, float alpha)
         {
-            RectFill(new Rect(rect.x + 6, rect.y + 6, rect.width, rect.height), Ink, alpha * 0.8f);
-            RectFill(new Rect(rect.x + 4, rect.y, rect.width - 8, rect.height), Copper, alpha);
-            RectFill(new Rect(rect.x, rect.y + 4, rect.width, rect.height - 8), Copper, alpha);
-            RectFill(new Rect(rect.x + 2, rect.y + 6, rect.width - 4, rect.height - 12), Ink, alpha);
-            RectFill(new Rect(rect.x + 6, rect.y + 2, rect.width - 12, rect.height - 4), Ink, alpha);
-            RectFill(new Rect(rect.x + 8, rect.y + rect.height - 6, rect.width - 16, 2), Plum, alpha);
+            ConvoyPixelUI.Panel(rect, alpha);
         }
 
         private static void RectFill(Rect rect, Color color, float alpha)
         {
-            color.a *= alpha;
-            GUI.color = QualitySettings.activeColorSpace == ColorSpace.Linear ? color.linear : color;
-            GUI.DrawTexture(rect, Texture2D.whiteTexture);
+            ConvoyPixelUI.Fill(rect, color, alpha);
         }
 
         private void Text(string text, float x, float y, int scale, Color color, float alpha)
         {
-            if (!lettering.TryGetValue(text, out Texture2D texture))
-            {
-                texture = MakeLettering(text);
-                lettering.Add(text, texture);
-            }
-            color.a *= alpha;
-            GUI.color = QualitySettings.activeColorSpace == ColorSpace.Linear ? color.linear : color;
-            GUI.DrawTexture(new Rect(Mathf.Round(x), Mathf.Round(y), texture.width * scale, texture.height * scale), texture);
-        }
-
-        // Five-column glyphs are baked once per caption, not drawn pixel by pixel every frame.
-        private static readonly Dictionary<char, string> Glyphs = new Dictionary<char, string>
-        {
-            ['A'] = "7E1111117E", ['B'] = "7F49494936", ['C'] = "3E41414122",
-            ['D'] = "7F4141221C", ['E'] = "7F49494941", ['F'] = "7F09090901",
-            ['G'] = "3E41495132", ['H'] = "7F0808087F", ['I'] = "00417F4100",
-            ['J'] = "204040403F", ['K'] = "7F08142241", ['L'] = "7F40404040",
-            ['M'] = "7F020C027F", ['N'] = "7F0408107F", ['O'] = "3E4141413E",
-            ['P'] = "7F09090906", ['Q'] = "3E4151215E", ['R'] = "7F09192946",
-            ['S'] = "2649494932", ['T'] = "01017F0101", ['U'] = "3F4040403F",
-            ['V'] = "1F2040201F", ['W'] = "3F4038403F", ['X'] = "6314081463",
-            ['Y'] = "0304780403", ['Z'] = "6151494543", ['0'] = "3E4549513E",
-            ['1'] = "00427F4000", ['2'] = "4261514946", ['3'] = "2141454B31",
-            ['4'] = "1814127F10", ['5'] = "2745454539", ['6'] = "3C4A494930",
-            ['7'] = "0171090503", ['8'] = "3649494936", ['9'] = "064949291E",
-            ['.'] = "0060600000", [','] = "0040200000", ['!'] = "00005F0000",
-            ['/'] = "2010080402", ['+'] = "08083E0808", ['-'] = "0808080808",
-            [':'] = "0036360000", [' '] = "0000000000"
-        };
-
-        private static Texture2D MakeLettering(string text)
-        {
-            int width = text.Length * 6 - 1;
-            Color32[] pixels = new Color32[width * 7];
-            for (int i = 0; i < text.Length; i++)
-            {
-                if (!Glyphs.TryGetValue(text[i], out string glyph))
-                    throw new InvalidOperationException("Missing crew-manual pixel glyph: " + text[i]);
-                for (int x = 0; x < 5; x++)
-                {
-                    int column = Convert.ToInt32(glyph.Substring(x * 2, 2), 16);
-                    for (int y = 0; y < 7; y++)
-                        if ((column & (1 << y)) != 0)
-                            pixels[(6 - y) * width + i * 6 + x] = new Color32(255, 255, 255, 255);
-                }
-            }
-            Texture2D texture = new Texture2D(width, 7, TextureFormat.RGBA32, false)
-            {
-                name = "Crew manual: " + text, filterMode = FilterMode.Point,
-                wrapMode = TextureWrapMode.Clamp, hideFlags = HideFlags.HideAndDontSave
-            };
-            texture.SetPixels32(pixels);
-            texture.Apply(false, true);
-            return texture;
-        }
-
-        public void Dispose()
-        {
-            foreach (Texture2D texture in lettering.Values)
-                if (Application.isPlaying) UnityEngine.Object.Destroy(texture);
-                else UnityEngine.Object.DestroyImmediate(texture);
-            lettering.Clear();
+            game.UI.Text(text, x, y, scale, color, alpha);
         }
     }
 }
