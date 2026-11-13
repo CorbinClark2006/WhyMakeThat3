@@ -48,6 +48,122 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
+    public void TutorialBatteryRouteUsesRealReachAndRetiresOnlySuccessfulSteps()
+    {
+        game.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.BatteryPickup));
+        Assert.That(game.Tutorial.FindHint().Target, Is.SameAs(game.supplyPack.transform));
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryPickup), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.False);
+        Assert.That(game.Tutorial.FindHint().Key, Is.EqualTo("WASD"));
+        Assert.That(game.player.TryInteract(), Is.False, "Picking up is not the same as loading.");
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.False);
+        game.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
+        Assert.That(game.Tutorial.FindHint().Key, Is.EqualTo("E"));
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.True);
+        game.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.Not.EqualTo(ConvoyTutorial.Lesson.BatteryPickup));
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.None));
+    }
+
+    [Test]
+    public void TutorialObstructedBatteryHasNoPickupHintAndFailedActionsDoNotTeach()
+    {
+        game.player.SetSpawn(new Vector3(0.6f, 0.82f, 2.5f), Quaternion.identity);
+        Vector3 midpoint = (game.player.transform.TransformPoint(Vector3.up * ConvoyPlayer.EyeHeight) +
+            game.supplyPack.transform.position) * 0.5f;
+        PrototypeGeometry.Part("Tutorial obstruction", game.van, game.van.InverseTransformPoint(midpoint),
+            Vector3.one * 0.08f, material);
+        Assert.That(game.player.FindReachableAmmo(), Is.Null);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.Not.EqualTo(ConvoyTutorial.Lesson.BatteryPickup));
+        Assert.That(game.player.TryInteract(), Is.False);
+        Assert.That(game.TryFire(), Is.False);
+        Assert.That(game.Tutorial.Learned, Is.EqualTo(ConvoyTutorial.Lesson.None));
+    }
+
+    [Test]
+    public void TutorialDrivingNeedsSuccessfulMountAndActualSteeringAndKeepsLateUnlearnedRepairs()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.DriverMount));
+        Assert.That(game.player.MountDriver(), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.DriverMount), Is.True);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.Steer));
+        game.Steer(0f, 1f);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.False);
+        for (int frame = 0; frame < 100; frame++)
+            game.Steer(1f, 0.001f);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.False);
+        game.Steer(1f, 0.05f);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.True);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.None));
+        game.player.DismountDriver();
+        for (int i = 0; i < 3; i++) game.accelerator.RegisterImpact();
+        game.AdvanceDifficulty(120f);
+        game.accelerator.Step(15f);
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2.95f), Quaternion.identity);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.RockPickup));
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.RockPickup), Is.True);
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 3.1f), Quaternion.identity);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.RockPlace));
+        Assert.That(game.Tutorial.FindHint().Key, Is.EqualTo("E"));
+        Assert.That(game.player.TryInteract(), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.RockPlace), Is.True);
+        for (int i = 0; i < 3; i++) game.accelerator.RegisterImpact();
+        game.accelerator.Step(1f);
+        Assert.That(game.accelerator.NeedsRock, Is.True);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.Not.EqualTo(ConvoyTutorial.Lesson.RockPickup));
+    }
+
+    [Test]
+    public void TutorialGunUseRetiresMountAndFireSeparately()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Gunner);
+        game.player.SetSpawn(new Vector3(0.9f, 0.82f, -1.35f), Quaternion.identity);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.GunMount));
+        Assert.That(game.player.Mount(), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.GunMount), Is.True);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.GunFire));
+        Assert.That(game.TryFire(), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.GunFire), Is.True);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.None));
+        game.player.Dismount();
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.Not.EqualTo(ConvoyTutorial.Lesson.GunMount));
+    }
+
+    [Test]
+    public void TutorialLearningSurvivesPauseButResetsForNewGameAndRequiresMeasuredMovement()
+    {
+        game.Tutorial.ObserveWalk(0.69f);
+        game.Tutorial.ObserveLook(11f);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Walk), Is.False);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Look), Is.False);
+        game.Tutorial.ObserveWalk(0.02f);
+        game.Tutorial.ObserveLook(1f);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Walk | ConvoyTutorial.Lesson.Look), Is.True);
+        game.SetPaused(true);
+        Assert.That(game.Tutorial.Visible, Is.False);
+        Assert.That(game.Tutorial.FindHint().Lesson, Is.EqualTo(ConvoyTutorial.Lesson.None));
+        game.SetPaused(false);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Walk), Is.True);
+        ConvoyPlayer remote = Object.Instantiate(game.player.gameObject, game.van).GetComponent<ConvoyPlayer>();
+        remote.IsLocal = false;
+        game.RecordLesson(remote, ConvoyTutorial.Lesson.BatteryLoad);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad), Is.False);
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        Assert.That(game.Tutorial.Learned, Is.EqualTo(ConvoyTutorial.Lesson.None));
+        for (int i = 0; i < 5; i++) game.RegisterRam(1);
+        Assert.That(game.Tutorial.Visible, Is.False);
+    }
+
+    [Test]
     public void DifficultyChangesExactlyEveryThirtySecondsAndKeepsRisingWithObjectLimits()
     {
         Assert.That(ConvoyPrototype.DifficultyInterval, Is.EqualTo(30f));

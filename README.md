@@ -83,6 +83,29 @@ SDK's reliable-data callback sender argument or RPCs. The world owner validates
 roles, interaction reach, ammunition, cooldown, and finite/bounded player poses.
 This is cooperative prototype networking, not a competitive anti-cheat system.
 
+### First-game crew manual
+
+Local practice and online co-op have a contextual, non-modal pixel-art crew
+manual. Nearby batteries, the railgun, steering wheel, and fallen accelerator
+rock get a small target bracket and a two-step instruction card with keycaps
+or a mouse-button diagram. Carried batteries/rocks point you toward the loading
+breech/pedal; **E** appears only when the same reach and collision checks used
+by the interaction say it can succeed. Movement, looking, jumping, aiming,
+firing, hood-view driving, steering, and road-hazard awareness are covered too.
+
+Successfully performed steps retire for **that player during this game**, with
+a brief "logged" stamp. Unfinished lessons remain available after difficulty
+increases; there is no forced tutorial pause or easier simulation. Walking and
+looking require actual movement; failed interactions and someone else's ammo,
+shots, or repairs never complete your lessons. Shared interactions are confirmed
+through the existing authority-owned, targeted event stream. Each client's
+learning survives authority migration; the shared world serialization layout
+is unchanged. A replacement player starts with fresh lessons.
+
+Pause/lobby/respawn/death hide the guide without erasing learning. A new game
+resets it; nothing is saved to the browser or computer. The persistent accelerator
+fault warning still appears after you've learned how to repair it.
+
 ### Endless survival difficulty
 
 The first 30 seconds retain the easier starting tuning. Every **30 seconds of

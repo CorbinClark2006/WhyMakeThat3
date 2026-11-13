@@ -85,6 +85,21 @@ namespace Convoy
             !ChoosingRole && !Paused && !IsDead && (player == null || !player.IsRespawning);
         public bool Mounted => player != null && player.Mounted;
         public float HitMarker { get; private set; }
+        private ConvoyTutorial tutorial;
+        public ConvoyTutorial Tutorial => tutorial ?? (tutorial = new ConvoyTutorial(this));
+
+        public void RecordLesson(ConvoyPlayer actor, ConvoyTutorial.Lesson lesson)
+        {
+            if (Online)
+            {
+                if (WorldAuthority)
+                    network.World.RecordLesson(actor.Role, lesson);
+                else if (actor.IsLocal)
+                    Tutorial.Complete(lesson);
+            }
+            else if (actor == player && actor.IsLocal)
+                Tutorial.Complete(lesson);
+        }
 
         private readonly List<Transient> effects = new List<Transient>();
         private Vector3 rigOffset, rigVelocity;
@@ -142,6 +157,7 @@ namespace Convoy
             if (!ChoosingRole || (role != PlayerRole.Gunner && role != PlayerRole.Driver))
                 throw new System.InvalidOperationException("Choose Player 1 or Player 2 from the startup selector.");
             Role = role;
+            Tutorial.Reset();
             PrototypeGeometry.BuildAvatar(player);
             if (DriverPractice)
             {
@@ -170,9 +186,12 @@ namespace Convoy
             }
             if (actor.Role != PlayerRole.Driver || !SimulationRunning || !actor.Driving)
                 return;
+            float previousOffset = SteeringOffset;
             SteeringOffset = Mathf.Clamp(SteeringOffset + Mathf.Clamp(input, -1f, 1f) * SteeringSpeed *
                 (CurrentSpeed / roadSpeed) * dt,
                 -RoadEdge, RoadEdge);
+            if (actor.IsLocal)
+                Tutorial.ObserveSteering(Mathf.Abs(SteeringOffset - previousOffset));
             Transform wheel = van.Find("Driver steering wheel");
             if (wheel != null)
                 wheel.localRotation = Quaternion.Euler(20f, 0f, -Mathf.Clamp(input, -1f, 1f) * 25f);
@@ -242,6 +261,7 @@ namespace Convoy
 
         private void LateUpdate()
         {
+            Tutorial.Tick(Time.unscaledDeltaTime);
             if (gunAmmoDisplay != null)
             {
                 gunAmmoDisplay.transform.parent.gameObject.SetActive(Mounted && !IsDead);
@@ -300,6 +320,7 @@ namespace Convoy
 
         private void OnDestroy()
         {
+            tutorial?.Dispose();
             if (shotSound != null) Destroy(shotSound);
             if (crashSound != null) Destroy(crashSound);
             if (explosionSound != null) Destroy(explosionSound);
@@ -413,6 +434,7 @@ namespace Convoy
                 return false;
 
             ShotsAvailable--;
+            RecordLesson(actor, ConvoyTutorial.Lesson.GunFire);
             Cooldown = 0.8f;
             shotKick = 3f;
             Ray ray = gunCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f));
@@ -446,6 +468,17 @@ namespace Convoy
         public bool TryLoadAmmo(ConvoyAmmoPack pack, ConvoyPlayer actor = null)
         {
             actor = actor != null ? actor : player;
+            if (!CanLoadAmmo(pack, actor))
+                return false;
+            ShotsAvailable = checked(ShotsAvailable + ShotsPerPack);
+            pack.Consume();
+            RecordLesson(actor, ConvoyTutorial.Lesson.BatteryLoad);
+            PlaySound(shotSound, 0.2f);
+            return true;
+        }
+
+        public bool CanLoadAmmo(ConvoyAmmoPack pack, ConvoyPlayer actor)
+        {
             if (!SimulationRunning || pack == null || pack.game != this || pack.Consumed)
                 return false;
             Physics.SyncTransforms();
@@ -453,12 +486,7 @@ namespace Convoy
             Vector3 breech = gun.TransformPoint(new Vector3(0f, -0.1f, -0.5f));
             bool atGun = pack.IsCarried && actor.CarriedAmmo == pack &&
                 CanReachAmmoLoadingPoint(pack, breech, actor, 1.5f);
-            if (!atSocket && !atGun)
-                return false;
-            ShotsAvailable = checked(ShotsAvailable + ShotsPerPack);
-            pack.Consume();
-            PlaySound(shotSound, 0.2f);
-            return true;
+            return atSocket || atGun;
         }
 
         private bool CanReachAmmoLoadingPoint(ConvoyAmmoPack pack, Vector3 target, ConvoyPlayer actor, float reach = 1.2f)
@@ -663,14 +691,8 @@ namespace Convoy
                 GUI.DrawTexture(new Rect(920, 28, 332, 48), Texture2D.whiteTexture);
                 GUI.color = new Color(1f, 0.75f, 0.2f);
                 GUI.Label(new Rect(920, 28, 332, 48), "!  Rock off accelerator", acceleratorAlertStyle);
-                if (!Mounted && !player.Driving && player.CarriedAmmo == null &&
-                    player.CanReachInteraction(player.CarryingRock ? accelerator.pedal.position : accelerator.rock.position))
-                {
-                    GUI.color = Color.white;
-                    GUI.Label(new Rect(390, 570, 500, 50),
-                        player.CarryingRock ? "E - Put rock on accelerator" : "E - Pick up rock", acceleratorAlertStyle);
-                }
             }
+            Tutorial.Draw();
             if (player.RespawnFadeAlpha > 0f)
             {
                 GUI.color = new Color(0f, 0f, 0f, player.RespawnFadeAlpha);
@@ -695,6 +717,7 @@ namespace Convoy
 
         public void BeginOnline(PlayerRole role)
         {
+            Tutorial.Reset();
             Role = role;
             showRoleSelection = false;
             player.OnlineRole = role;

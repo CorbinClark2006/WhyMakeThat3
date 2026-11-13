@@ -28,6 +28,7 @@ namespace Convoy
         private bool hadAuthority;
         private int seenEvents;
         private int lastDriverSequence;
+        private int gunnerLessons, driverLessons;
         private float nextDiscovery, steering, lastDriverFrame;
         private ConvoyPrototype Game => session.Game;
 
@@ -131,8 +132,8 @@ namespace Convoy
                 Position = role == 2 ? ConvoyPrototype.DriverSpawn : session.gunnerSpawn,
                 Yaw = role == 2 ? 0f : session.gunnerRotation.eulerAngles.y, Grounded = true
             };
-            if (role == 1) { Gunner = source; GunnerPose = pose; GunnerProcessed = 0; }
-            else { Driver = source; DriverPose = pose; DriverProcessed = 0; }
+            if (role == 1) { Gunner = source; GunnerPose = pose; GunnerProcessed = 0; gunnerLessons = 0; }
+            else { Driver = source; DriverPose = pose; DriverProcessed = 0; driverLessons = 0; }
             session.EnsureActors();
         }
 
@@ -167,6 +168,8 @@ namespace Convoy
                 seenEvents++;
                 if (message.Kind == 1 && message.Target == Runner.LocalPlayer)
                     session.Report(message.Message.ToString());
+                else if (message.Kind == 5 && message.Target == Runner.LocalPlayer)
+                    Game.Tutorial.Complete((ConvoyTutorial.Lesson)message.Value);
                 else if (!HasStateAuthority)
                 {
                     if (message.Kind == 2)
@@ -200,6 +203,19 @@ namespace Convoy
             Emit(4, 0, Game.transform.InverseTransformPoint(position), PlayerRef.None);
         public void Remember(GameObject visual) => tracked.Add(visual);
         public void Untrack(GameObject visual) => tracked.Remove(visual);
+
+        public void RecordLesson(ConvoyPrototype.PlayerRole role, ConvoyTutorial.Lesson lesson)
+        {
+            if (!HasStateAuthority)
+                throw new System.InvalidOperationException("Only world authority can confirm shared interaction lessons.");
+            int learned = role == ConvoyPrototype.PlayerRole.Driver ? driverLessons : gunnerLessons;
+            if ((learned & (int)lesson) == (int)lesson)
+                return;
+            if (role == ConvoyPrototype.PlayerRole.Gunner) gunnerLessons |= (int)lesson;
+            else if (role == ConvoyPrototype.PlayerRole.Driver) driverLessons |= (int)lesson;
+            else throw new System.ArgumentOutOfRangeException(nameof(role));
+            Emit(5, (int)lesson, Vector3.zero, role == ConvoyPrototype.PlayerRole.Driver ? Driver : Gunner);
+        }
 
         private void LateUpdate()
         {

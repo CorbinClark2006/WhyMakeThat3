@@ -49,6 +49,9 @@ public sealed class ConvoyCoopTests
         second.network.SteeringInput = 1f;
         yield return Wait(() => first.SteeringOffset > 4.8f && second.SteeringOffset > 4.8f,
             "The driver's input must steer the van seen by the gunner.");
+        yield return Wait(() => second.Tutorial.Knows(ConvoyTutorial.Lesson.Steer),
+            "Only confirmed remote steering should teach the driver.");
+        Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.False);
         second.player.DismountDriver();
         second.network.SteeringInput = 0f;
         float distance = first.DistanceTravelled;
@@ -64,6 +67,9 @@ public sealed class ConvoyCoopTests
         yield return Wait(() => first.player.CarriedAmmo != null && second.player.CarriedAmmo != null &&
             first.otherPlayer.CarriedAmmo != null, "Both players must receive distinct shared batteries.");
         Assert.That(first.player.CarriedAmmo, Is.Not.SameAs(first.otherPlayer.CarriedAmmo));
+        yield return Wait(() => first.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryPickup) &&
+            second.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryPickup),
+            "Each player should learn from their own confirmed battery pickup.");
         first.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
         second.player.SetSpawn(new Vector3(0.8f, 0.35f, -1.35f), Quaternion.identity);
         first.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
@@ -71,6 +77,9 @@ public sealed class ConvoyCoopTests
         yield return Wait(() => first.ShotsAvailable == 12 && second.ShotsAvailable == 12 &&
             first.player.CarriedAmmo == null && second.player.CarriedAmmo == null,
             "Either role must reload the same authoritative gun without duplicating ammo.");
+        yield return Wait(() => first.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad) &&
+            second.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad),
+            "Both players independently completed the reload route.");
 
         first.RegisterRam(1);
         first.RegisterRam(-1);
@@ -90,6 +99,10 @@ public sealed class ConvoyCoopTests
         second.network.World.SendAction(ConvoyNetworkWorld.Action.Interact);
         yield return Wait(() => !first.accelerator.NeedsRock && !second.accelerator.NeedsRock,
             "The driver must place the shared rock back on the pedal.");
+        yield return Wait(() => second.Tutorial.Knows(ConvoyTutorial.Lesson.RockPickup | ConvoyTutorial.Lesson.RockPlace),
+            "Confirmed repair steps must teach the remote player who performed them.");
+        Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.RockPickup), Is.False);
+        Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.RockPlace), Is.False);
         first.accelerator.Step(5f);
         yield return Wait(() => Mathf.Abs(second.CurrentSpeed - second.roadSpeed) < 0.001f,
             "Both worlds must recover normal speed.");
@@ -107,6 +120,9 @@ public sealed class ConvoyCoopTests
         yield return Wait(() => first.DestroyedVans == 1 && second.DestroyedVans == 1 &&
             first.ShotsAvailable == 10 && second.ShotsAvailable == 10,
             "Two authoritative shots must destroy the enemy and consume the same ammo.");
+        yield return Wait(() => first.Tutorial.Knows(ConvoyTutorial.Lesson.GunFire),
+            "Confirmed firing must complete only the gunner's lesson.");
+        Assert.That(second.Tutorial.Knows(ConvoyTutorial.Lesson.GunFire), Is.False);
 
         first.network.Runner.SetMasterClient(second.network.Runner.LocalPlayer);
         yield return Wait(() => !first.network.World.HasStateAuthority && second.network.World.HasStateAuthority,
@@ -115,6 +131,8 @@ public sealed class ConvoyCoopTests
         Assert.That(second.Health, Is.EqualTo(2));
         Assert.That(second.ShotsAvailable, Is.EqualTo(10));
         Assert.That(second.accelerator.NeedsRock, Is.False);
+        Assert.That(second.Tutorial.Knows(ConvoyTutorial.Lesson.BatteryLoad | ConvoyTutorial.Lesson.RockPlace), Is.True);
+        Assert.That(first.Tutorial.Knows(ConvoyTutorial.Lesson.RockPlace), Is.False);
         Assert.That(first.Pursuers.Count, Is.EqualTo(second.Pursuers.Count), "Authority handoff must not duplicate entities.");
         second.AdvanceDifficulty(ConvoyPrototype.DifficultyInterval);
         yield return Wait(() => first.DifficultyStage == 1 && second.DifficultyStage == 1,

@@ -65,21 +65,28 @@ namespace Convoy
 
         public bool TryPickUp(ConvoyPlayer player)
         {
-            if (!game.SimulationRunning || RockOnPedal || IsCarried || !game.ContainsPlayer(player) ||
-                player.Mounted || player.Driving || player.IsRespawning || player.CarriedAmmo != null ||
-                !player.CanReachInteraction(rock.position))
+            if (!CanPickUp(player))
                 return false;
             IsCarried = true;
             rock.SetParent(player.transform, false);
             rock.localPosition = new Vector3(0f, ConvoyAmmoPack.CarryHeight, ConvoyAmmoPack.CarryDistance);
             rock.localRotation = Quaternion.identity;
+            game.RecordLesson(player, ConvoyTutorial.Lesson.RockPickup);
             return true;
         }
 
+        public bool CanPickUp(ConvoyPlayer player) =>
+            game.SimulationRunning && !RockOnPedal && !IsCarried && game.ContainsPlayer(player) &&
+            !player.Mounted && !player.Driving && !player.IsRespawning && player.CarriedAmmo == null &&
+            player.CanReachInteraction(rock.position);
+
+        public bool CanPlace(ConvoyPlayer player) =>
+            game.SimulationRunning && IsCarried && game.ContainsPlayer(player) &&
+            rock.parent == player.transform && player.CanReachInteraction(pedal.position);
+
         public bool TryPlace(ConvoyPlayer player)
         {
-            if (!game.SimulationRunning || !IsCarried || !game.ContainsPlayer(player) ||
-                rock.parent != player.transform || !player.CanReachInteraction(pedal.position))
+            if (!CanPlace(player))
                 return false;
             IsCarried = false;
             RockOnPedal = true;
@@ -91,6 +98,7 @@ namespace Convoy
             rockElapsed = 0.45f;
             rock.localRotation = Quaternion.identity;
             pedal.localRotation = Quaternion.identity;
+            game.RecordLesson(player, ConvoyTutorial.Lesson.RockPlace);
             return true;
         }
 

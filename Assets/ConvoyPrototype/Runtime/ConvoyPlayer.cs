@@ -114,6 +114,8 @@ namespace Convoy
                     (keyboard.dKey.isPressed ? 1f : 0f) - (keyboard.aKey.isPressed ? 1f : 0f),
                     (keyboard.wKey.isPressed ? 1f : 0f) - (keyboard.sKey.isPressed ? 1f : 0f));
                 input = Vector2.ClampMagnitude(input, 1f);
+                if (look.sqrMagnitude > 0.01f)
+                    game.Tutorial.ObserveLook(look.magnitude);
                 jumpBuffer = Mathf.Max(0f, jumpBuffer - dt);
                 groundGrace = controller.isGrounded ? 0.08f : Mathf.Max(0f, groundGrace - dt);
                 if (keyboard.spaceKey.wasPressedThisFrame)
@@ -124,6 +126,7 @@ namespace Convoy
                 {
                     verticalVelocity = 4.2f;
                     jumpBuffer = groundGrace = 0f;
+                    game.RecordLesson(this, ConvoyTutorial.Lesson.Jump);
                 }
                 verticalVelocity -= 12f * dt;
                 Vector3 walk = transform.localRotation * new Vector3(input.x, 0f, input.y);
@@ -136,6 +139,8 @@ namespace Convoy
                 }
                 Vector3 moved = Vector3.ProjectOnPlane(transform.position - beforeMove, game.van.up);
                 bool moving = Vector3.Dot(moved, game.van.TransformDirection(walk)) > 0.0001f;
+                if (moving)
+                    game.Tutorial.ObserveWalk(moved.magnitude);
                 animationInput = moving ? input : Vector2.zero;
                 if (spriteAvatar != null && spriteAvatar.enabled)
                     spriteAvatar.Animate(moving ? input : Vector2.zero, controller.isGrounded, dt);
@@ -311,6 +316,7 @@ namespace Convoy
             view.GetComponent<AudioListener>().enabled = false;
             game.gunCamera.enabled = true;
             game.gunCamera.GetComponent<AudioListener>().enabled = true;
+            game.RecordLesson(this, ConvoyTutorial.Lesson.GunMount);
             verticalVelocity = 0f;
             jumpBuffer = groundGrace = 0f;
             return true;
@@ -342,6 +348,7 @@ namespace Convoy
             if (controller == null)
                 controller = GetComponent<CharacterController>();
             Driving = true;
+            game.RecordLesson(this, ConvoyTutorial.Lesson.DriverMount);
             controller.enabled = false;
             verticalVelocity = 0f;
             jumpBuffer = groundGrace = 0f;
@@ -384,6 +391,18 @@ namespace Convoy
         {
             if (Mounted || Driving || CarriedAmmo != null || CarryingRock || !game.SimulationRunning)
                 return false;
+            ConvoyAmmoPack nearest = FindReachableAmmo();
+            if (nearest == null)
+                return false;
+            CarriedAmmo = nearest;
+            nearest.PickUp(this);
+            game.ReplenishAmmoSupply(nearest);
+            game.RecordLesson(this, ConvoyTutorial.Lesson.BatteryPickup);
+            return true;
+        }
+
+        public ConvoyAmmoPack FindReachableAmmo()
+        {
             Vector3 origin = transform.TransformPoint(Vector3.up * EyeHeight);
             Physics.SyncTransforms();
             ConvoyAmmoPack nearest = null;
@@ -400,12 +419,7 @@ namespace Convoy
                 nearest = pack;
                 distance = candidate;
             }
-            if (nearest == null)
-                return false;
-            CarriedAmmo = nearest;
-            nearest.PickUp(this);
-            game.ReplenishAmmoSupply(nearest);
-            return true;
+            return nearest;
         }
 
         public void ReleaseAmmo(bool tryReload)

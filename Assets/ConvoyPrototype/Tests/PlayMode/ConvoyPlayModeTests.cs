@@ -78,6 +78,38 @@ public sealed class ConvoyPlayModeTests
     }
 
     [UnityTest]
+    public IEnumerator TutorialActualControlsTeachJumpDrivingAndHideDuringRespawn()
+    {
+        game.showRoleSelection = true;
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        yield return new WaitForSeconds(0.2f);
+        Assert.That(game.Tutorial.Current.Lesson, Is.EqualTo(ConvoyTutorial.Lesson.DriverMount));
+        InputSystem.QueueStateEvent(mouse, new MouseState().WithButton(MouseButton.Right));
+        yield return new WaitForSeconds(0.1f);
+        Assert.That(game.player.Driving, Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.DriverMount), Is.True);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.False);
+        InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.D));
+        yield return new WaitForSeconds(0.3f);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Steer), Is.True);
+        Assert.That(game.Tutorial.Current.Lesson, Is.EqualTo(ConvoyTutorial.Lesson.None));
+        InputState.Change(mouse, new MouseState());
+        InputState.Change(keyboard, new KeyboardState());
+        game.player.SetSpawn(new Vector3(-0.9f, 0.214f, 2f), Quaternion.identity);
+        yield return new WaitForSeconds(0.2f);
+        InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Space));
+        yield return new WaitForSeconds(0.1f);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Jump), Is.True);
+        InputState.Change(keyboard, new KeyboardState());
+        game.player.SetSpawn(new Vector3(0f, -0.6f, 0f), Quaternion.identity);
+        yield return null;
+        yield return null;
+        Assert.That(game.player.IsRespawning, Is.True);
+        Assert.That(game.Tutorial.Visible, Is.False);
+        Assert.That(game.Tutorial.Knows(ConvoyTutorial.Lesson.Jump), Is.True);
+    }
+
+    [UnityTest]
     public IEnumerator DifficultyActualUpdateSpawnsExtraChasersAtThirtySecondsAndRespectsCap()
     {
         game.player.enabled = false;
