@@ -283,10 +283,10 @@ namespace Convoy
         public static void InstallMainVanModel(ConvoyPrototype game)
         {
             if (game.mainVanModelPrefab == null)
-                throw new System.InvalidOperationException("Assign the intact v008 player van prefab.");
+                throw new System.InvalidOperationException("Assign the main ship prefab.");
             RemoveLegacyVanParts(game.van);
             game.mainVanModel = Object.Instantiate(game.mainVanModelPrefab, game.van.transform, false).transform;
-            game.mainVanModel.name = "Intact v008 player van";
+            game.mainVanModel.name = "Main ship v009";
             SetLayer(game.mainVanModel, 8);
         }
 

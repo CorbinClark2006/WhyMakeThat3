@@ -78,7 +78,7 @@ must remain enabled for this App ID in the Photon dashboard.
 The build command selects the custom [Convoy WebGL template](Assets/WebGLTemplates/Convoy/index.html),
 including its matching pixel loading screen, progress indicator, and fullscreen
 control. Refresh both browsers after an update; replay uses application version
-`convoy-web-8` and cannot join rooms from an older cached build.
+`convoy-web-9` and cannot join rooms from an older cached build.
 The `main` branch holds the editable Unity project; the `gh-pages` branch holds
 the compiled site. Pushing source edits to `main` does not rebuild the website:
 rebuild WebGL and publish the contents of `Build/WebGL` to `gh-pages` to release
@@ -316,11 +316,38 @@ The van uses the intact imported model; road and gameplay props use editable gra
 
 Player 1 uses the eight Beaddy sprites in [Assets/main_characters/player1](Assets/main_characters/player1), replacing the primitive avatar without changing the 0.2-meter collision capsule. Moving forward shows the back-facing two-frame walk, and moving backward shows the front-facing walk. Idle and jump poses retain the last facing direction; strafing uses that direction too. The upright sprite turns with the camera so it never becomes edge-on, respects world depth, and hides in the railgun optic or when the follow camera retracts too close. Frames use point filtering, uncompressed transparency, a bottom-center pivot, and 160 pixels per unit. The shared [Player1SpriteAvatar prefab](Assets/ConvoyPrototype/Player1SpriteAvatar.prefab) stores all frames; **Tools > Convoy > Apply Player 1 Sprites** refreshes only the avatar and its imports without rebuilding the cabin.
 
-The player van uses the complete [truckgreybox_v008.fbx](Assets/main_van/truckgreybox_v008.fbx) with its original meshes and materials. Chasers use the complete [truckchaser_v001.fbx](Assets/Game%20Assets/truckchaser_v001.fbx) in [PursuerVanV001.prefab](Assets/ConvoyPrototype/PursuerVanV001.prefab), with [Grass.mat](Assets/ConvoyPrototype/Materials/Grass.mat) on every model material slot. Both models remain intact; only whole-model position, rotation, and uniform scale are fitted. Chasers face along the road, fit within the existing lane envelope, and have hitboxes matching their rendered bounds, with the armor indicator just above the roof. **Tools > Convoy > Apply Chaser Van Model** updates only the pursuer prefab and scene reference, leaving the main van and authored cargo untouched. Previous van shells, graybox seats, partition panels, wheels, and their old colliders are removed, not hidden. Cargo boxes, gunner stools, railgun, lights, batteries, and the loading socket remain separate gameplay assets. The boxes form a jump route through the main model's original partition opening, and the passenger battery supply sits beside its passenger seat.
+The main ship uses the original body mesh from
+[Truck_v009.obj](Assets/Game%20Assets/in_van_assets/textures/Truck_v009.obj)
+and its authored [in_van.mat](Assets/Game%20Assets/in_van_assets/textures/in_van.mat).
+The export has matching dimensions but a different origin: its whole body is
+uniformly scaled, rotated and translated to match the previous body within
+5 mm. No source vertices are edited. The two interior pipe meshes and their
+materials are retained from [truckgreybox_v008.fbx](Assets/main_van/truckgreybox_v008.fbx),
+because the v009 export does not contain them. The stable
+[PlayerVanV008.prefab](Assets/ConvoyPrototype/PlayerVanV008.prefab) path/GUID now
+holds the v009 ship, keeping existing scene and test references compatible.
+**Tools > Convoy > Replace Main Ship With v009** replaces only the main model,
+preserving its transform and all separately authored gameplay objects; it
+consumes the staged `Truck_v009 (1)` scene instance instead of leaving a duplicate
+truck beside the road. It does not refit cargo or rebuild chasers.
+
+Chasers still use the complete
+[truckchaser_v001.fbx](Assets/Game%20Assets/truckchaser_v001.fbx) in
+[PursuerVanV001.prefab](Assets/ConvoyPrototype/PursuerVanV001.prefab), with
+[Grass.mat](Assets/ConvoyPrototype/Materials/Grass.mat) on every material slot.
+Their model, hitbox, armor indicator and two-hit destruction are unchanged.
+Cargo boxes, stools, railgun, lights, batteries, loading socket, driver station,
+accelerator and fire-repair positions remain separate gameplay assets.
 
 The default spawn is at van-local `(-0.97, 0.14, -1.5)`, on solid floor beside the cracked opening. Keep space around the spawn for strafing and the 0.6-meter camera orbit; placing the tiny player beside a box can block movement and collapse the camera even without initial capsule penetration. Place edited spawns on solid model geometry, not over the opening. Player yaw initializes from the saved transform so movement and camera direction agree with the scene's spawn orientation. Collision regressions check actual character falls through the gap and support from the floor and both pipes.
 
-The player wrapper has an exact transformed copy of all model triangles for collision only (the rendered meshes remain original), avoiding unstable physics from the FBX's large local coordinates. Collision follows the original body and both pipes: there is no invisible support floor covering the cracked opening, so the player can fall through gaps and land on the pipes. Cargo and gun props retain their own colliders, and the main van damage hitbox remains a non-blocking trigger. Pursuers retain an invisible gameplay hull for shot detection and ram contact, their armor-status indicator, two-hit destruction, and eight-second slowdown. There are no added van wheels or body parts. **Tools > Convoy > Apply v008 Van Models** refreshes the intact model wrappers and fits the gameplay assets without slicing or rebuilding the imported model.
+The player wrapper retains the exact original transformed body/pipe collision
+triangles, preserving the floor gap, pipes, partition, seat/footwell and hood
+surfaces while rendering the aligned v009 body. No invisible floor or extra
+collision hull is added. Cargo and gun props retain their own colliders, and the
+main damage hitbox remains a non-blocking trigger. The older **Apply v008 Van
+Models** menu now builds the current v009 wrapper but still performs its legacy
+cargo fitting; use **Replace Main Ship With v009** for a model-only update.
 
 Walking runs at 3.2 m/s with immediate starts, stops, and direction changes. Jumps have a short input buffer and ledge grace period, with enough height for the existing 0.3-meter box steps and 0.6-meter stacked-box rises. The smaller capsule fits tighter cargo gaps without changing your box layout. Walking and impact shoves use collision-checked substeps; cabin limits constrain the requested movement rather than teleporting the player afterward. Cargo, walls, the stool, and the gun's pedestal/body block movement.
 
@@ -328,7 +355,7 @@ Walking runs at 3.2 m/s with immediate starts, stops, and direction changes. Jum
 
 Open **Window > General > Test Runner**, choose **EditMode**, and run **ConvoyPrototype.Tests**. The focused tests cover road recycling, fixed van position, impact direction, chase/ram transitions, damage-hitbox contact, fifth-hit shutdown, strong enemy slide/spacing, the exact eight-second slowdown, four-shot stackable reloads and blocked reload rejection, exactly-two-hit destruction, mounting/camera restoration, shot hit detection and cooldown, and pause behavior.
 
-The **PlayMode** suite, **ConvoyPrototype.PlayModeTests**, checks that the saved scene starts clear of obstacles and remains non-penetrating during walking and repeated rams. It checks the intact model's partition from both sides, laser slide and effect cleanup, fading ram feedback, fifth-hit shutdown, keyboard restart, shot depletion/refill, and E pickup/carry/drop/recovery/loading. An authored-scene route test jumps through the model's partition opening, collects a passenger battery, and returns it to the loading socket; update its waypoints when intentionally changing this route. Other mechanics tests use a separate generated layout so collaborators can rearrange cargo without invalidating those timed jump routes. They also cover tiny-player scale, sprite animation, third-person camera obstruction and recovery, all three cargo-box heights and the stool, a direct 0.6-meter box jump, responsive starts/stops and mouse look, mounting, collisions against cargo/the model/the gun pedestal, live chase updates and rams, and two aimed shots across a recharge. EditMode checks assert that rendered meshes come directly from their respective original FBX files, the main van keeps its original materials, every chaser model slot uses Grass, the chaser hitbox matches its geometry, both wrapper scales are uniform, and no legacy van parts remain. Test fixtures isolate virtual input from editor focus routing and restore the previous settings afterward. Do not edit scripts or interact with the Game view while these tests are running.
+The **PlayMode** suite, **ConvoyPrototype.PlayModeTests**, checks that the saved scene starts clear of obstacles and remains non-penetrating during walking and repeated rams. It checks the intact model's partition from both sides, laser slide and effect cleanup, fading ram feedback, fifth-hit shutdown, keyboard restart, shot depletion/refill, and E pickup/carry/drop/recovery/loading. An authored-scene route test jumps through the model's partition opening, collects a passenger battery, and returns it to the loading socket; update its waypoints when intentionally changing this route. Other mechanics tests use a separate generated layout so collaborators can rearrange cargo without invalidating those timed jump routes. They also cover tiny-player scale, sprite animation, third-person camera obstruction and recovery, all three cargo-box heights and the stool, a direct 0.6-meter box jump, responsive starts/stops and mouse look, mounting, collisions against cargo/the model/the gun pedestal, live chase updates and rams, and two aimed shots across a recharge. EditMode checks assert that the main body uses the original v009 OBJ mesh and authored material, retained pipes use their original FBX meshes/materials, and every original collision vertex/triangle is preserved. They also verify body alignment within 5 mm, Grass on chasers, fitted chaser hitboxes, uniform scaling and removal of legacy graybox shell parts. Test fixtures isolate virtual input from editor focus routing and restore the previous settings afterward. Do not edit scripts or interact with the Game view while these tests are running.
 
 ## Work together
 

@@ -7,7 +7,8 @@ using UnityEngine;
 
 public static class VanModelSetup
 {
-    public const string SourcePath = "Assets/main_van/truckgreybox_v008.fbx";
+    public const string SourcePath = "Assets/Game Assets/in_van_assets/textures/Truck_v009.obj";
+    public const string LegacySourcePath = "Assets/main_van/truckgreybox_v008.fbx";
     public const string PursuerSourcePath = "Assets/Game Assets/truckchaser_v001.fbx";
     public const string PursuerMaterialPath = "Assets/ConvoyPrototype/Materials/Grass.mat";
     public const string PlayerPrefabPath = "Assets/ConvoyPrototype/PlayerVanV008.prefab";
@@ -79,10 +80,12 @@ public static class VanModelSetup
 
     private static GameObject CreatePlayerPrefab(GameObject source)
     {
-        GameObject root = new GameObject("Intact v008 player van");
+        GameObject legacy = AssetDatabase.LoadAssetAtPath<GameObject>(LegacySourcePath);
+        if (legacy == null) throw new InvalidOperationException("Missing original truck alignment and pipe geometry.");
+        GameObject root = new GameObject("Main ship v009");
         try
         {
-            GameObject model = (GameObject)PrefabUtility.InstantiatePrefab(source);
+            GameObject model = (GameObject)PrefabUtility.InstantiatePrefab(legacy);
             model.transform.SetParent(root.transform, false);
             float scale = 0.65f;
             model.transform.localScale = Vector3.one * scale;
@@ -99,7 +102,7 @@ public static class VanModelSetup
                     foreach (int index in filter.sharedMesh.triangles)
                         triangles.Add(start + index);
                 }
-                Mesh collision = new Mesh { name = "Intact v008 collision" };
+                Mesh collision = new Mesh { name = "PlayerVanV008Collision" };
                 collision.SetVertices(vertices);
                 collision.SetTriangles(triangles, 0);
                 collision.RecalculateBounds();
@@ -116,6 +119,30 @@ public static class VanModelSetup
                 }
                 root.AddComponent<MeshCollider>().sharedMesh = collision;
             }
+            MeshFilter oldBody = Array.Find(model.GetComponentsInChildren<MeshFilter>(), f => f.name == "pCube3");
+            if (oldBody == null) throw new InvalidOperationException("Missing original truck body alignment.");
+            Bounds target = oldBody.GetComponent<Renderer>().bounds;
+            GameObject replacement = (GameObject)PrefabUtility.InstantiatePrefab(source);
+            replacement.transform.SetParent(root.transform, false);
+            replacement.transform.localRotation = Quaternion.Euler(0f, -90f, 0f);
+            Bounds original = RenderedBounds(replacement);
+            float uniformScale = target.size.z / original.size.z;
+            replacement.transform.localScale *= uniformScale;
+            Bounds fitted = RenderedBounds(replacement);
+            if (Vector3.Distance(fitted.size, target.size) > 0.005f)
+                throw new InvalidOperationException("Replacement truck dimensions do not match the original body.");
+            replacement.transform.localPosition += target.center - fitted.center;
+            Material appearance = AssetDatabase.LoadAssetAtPath<Material>(
+                "Assets/Game Assets/in_van_assets/textures/in_van.mat");
+            if (appearance == null) throw new InvalidOperationException("Missing authored v009 truck material.");
+            foreach (Renderer renderer in replacement.GetComponentsInChildren<Renderer>())
+            {
+                Material[] materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++) materials[i] = appearance;
+                renderer.sharedMaterials = materials;
+            }
+
+            UnityEngine.Object.DestroyImmediate(oldBody.gameObject);
             foreach (Transform child in root.GetComponentsInChildren<Transform>())
                 child.gameObject.layer = 8;
             return PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
@@ -124,6 +151,47 @@ public static class VanModelSetup
         {
             UnityEngine.Object.DestroyImmediate(root);
         }
+    }
+
+    private static Bounds RenderedBounds(GameObject model)
+    {
+        Renderer[] renderers = model.GetComponentsInChildren<Renderer>();
+        if (renderers.Length == 0) throw new InvalidOperationException("Replacement truck has no rendered geometry.");
+        Bounds bounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+        return bounds;
+    }
+
+    [MenuItem("Tools/Convoy/Replace Main Ship With v009")]
+    public static void ReplaceMainShip()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+            throw new InvalidOperationException("Exit play mode before replacing the main ship.");
+        if (Application.isBatchMode) EditorSceneManager.OpenScene("Assets/Scenes/ConvoyPrototype.unity");
+        var game = UnityEngine.Object.FindFirstObjectByType<ConvoyPrototype>();
+        if (game == null || game.mainVanModel == null)
+            throw new InvalidOperationException("Open the authored gameplay scene before replacing the main ship.");
+        GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(SourcePath);
+        if (source == null) throw new InvalidOperationException("Missing v009 truck asset.");
+        Transform previous = game.mainVanModel;
+        Vector3 position = previous.localPosition, scale = previous.localScale;
+        Quaternion rotation = previous.localRotation;
+        Undo.RecordObject(game, "Replace main ship with v009");
+        game.mainVanModelPrefab = CreatePlayerPrefab(source);
+        Undo.DestroyObjectImmediate(previous.gameObject);
+        game.mainVanModel = UnityEngine.Object.Instantiate(game.mainVanModelPrefab, game.van, false).transform;
+        game.mainVanModel.localPosition = position;
+        game.mainVanModel.localRotation = rotation;
+        game.mainVanModel.localScale = scale;
+        Undo.RegisterCreatedObjectUndo(game.mainVanModel.gameObject, "Replace main ship with v009");
+        foreach (GameObject root in game.gameObject.scene.GetRootGameObjects())
+            if (root.name == "Truck_v009 (1)")
+                Undo.DestroyObjectImmediate(root);
+        EditorUtility.SetDirty(game);
+        EditorSceneManager.MarkSceneDirty(game.gameObject.scene);
+        EditorSceneManager.SaveScene(game.gameObject.scene);
+        AssetDatabase.SaveAssets();
+        Debug.Log("Main ship replaced with v009; gameplay transforms, original collision, pipes and chasers preserved.");
     }
 
     [MenuItem("Tools/Convoy/Apply v008 Van Models")]

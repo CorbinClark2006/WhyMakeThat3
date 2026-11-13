@@ -870,7 +870,32 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
-    public void MainVanUsesV008AndChaserUsesV001WithGrassAndFittedHitbox()
+    public void ReplacementBodyMatchesOriginalAlignmentWithoutMovingGameplaySurfaces()
+    {
+        var original = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(VanModelSetupPath);
+        MeshFilter oldBody = System.Array.Find(original.GetComponentsInChildren<MeshFilter>(), f => f.name == "pCube3");
+        MeshFilter newBody = System.Array.Find(game.mainVanModel.GetComponentsInChildren<MeshFilter>(), f => f.name == "pCube3");
+        Matrix4x4 alignment = Matrix4x4.TRS(new Vector3(0f, 0.0615f, -0.099f),
+            Quaternion.Euler(0f, -90f, 0f), Vector3.one * 0.65f);
+        var expected = new System.Collections.Generic.List<Vector3>();
+        var actual = new System.Collections.Generic.List<Vector3>();
+        foreach (Vector3 point in oldBody.sharedMesh.vertices)
+            expected.Add(alignment.MultiplyPoint3x4(original.transform.InverseTransformPoint(oldBody.transform.TransformPoint(point))));
+        foreach (Vector3 point in newBody.sharedMesh.vertices)
+            actual.Add(game.mainVanModel.InverseTransformPoint(newBody.transform.TransformPoint(point)));
+        float largest = 0f;
+        foreach (Vector3 point in actual)
+        {
+            float nearest = float.PositiveInfinity;
+            foreach (Vector3 target in expected) nearest = Mathf.Min(nearest, (point - target).sqrMagnitude);
+            largest = Mathf.Max(largest, Mathf.Sqrt(nearest));
+        }
+        Assert.That(largest, Is.LessThan(0.005f),
+            "New visible body must agree with preserved gameplay collision after export-origin correction.");
+    }
+
+    [Test]
+    public void MainVanUsesV009WithOriginalGameplayCollisionAndChaserUsesV001()
     {
         Assert.That(game.mainVanModel, Is.Not.Null);
         Assert.That(game.mainVanModel.IsChildOf(game.van), Is.True);
@@ -911,13 +936,29 @@ public sealed class ConvoyMechanicsTests
         Assert.That(actual.Length, Is.EqualTo(original.Length));
         for (int i = 0; i < actual.Length; i++)
         {
-            Assert.That(actual[i].sharedMesh, Is.SameAs(original[i].sharedMesh),
-                "Model must use the original FBX mesh, not edited or sliced geometry.");
             if (solid)
-                Assert.That(actual[i].GetComponent<Renderer>().sharedMaterials,
-                    Is.EqualTo(original[i].GetComponent<Renderer>().sharedMaterials));
+            {
+                if (actual[i].name == "pCube3")
+                {
+                    var replacement = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                        "Assets/Game Assets/in_van_assets/textures/Truck_v009.obj");
+                    Assert.That(actual[i].sharedMesh, Is.SameAs(replacement.GetComponentInChildren<MeshFilter>().sharedMesh));
+                    foreach (Material assigned in actual[i].GetComponent<Renderer>().sharedMaterials)
+                        Assert.That(UnityEditor.AssetDatabase.GetAssetPath(assigned),
+                            Is.EqualTo("Assets/Game Assets/in_van_assets/textures/in_van.mat"));
+                }
+                else
+                {
+                    MeshFilter pipe = System.Array.Find(original, f => f.name == actual[i].name);
+                    Assert.That(pipe, Is.Not.Null);
+                    Assert.That(actual[i].sharedMesh, Is.SameAs(pipe.sharedMesh));
+                    Assert.That(actual[i].GetComponent<Renderer>().sharedMaterials,
+                        Is.EqualTo(pipe.GetComponent<Renderer>().sharedMaterials));
+                }
+            }
             else
             {
+                Assert.That(actual[i].sharedMesh, Is.SameAs(original[i].sharedMesh));
                 Material grass = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
                     "Assets/ConvoyPrototype/Materials/Grass.mat");
                 foreach (Material assigned in actual[i].GetComponent<Renderer>().sharedMaterials)
@@ -936,11 +977,14 @@ public sealed class ConvoyMechanicsTests
             Mesh collision = model.GetComponent<MeshCollider>().sharedMesh;
             var vertices = new System.Collections.Generic.List<Vector3>();
             var triangles = new System.Collections.Generic.List<int>();
-            foreach (MeshFilter filter in actual)
+            Matrix4x4 alignment = Matrix4x4.TRS(new Vector3(0f, 0.0615f, -0.099f),
+                Quaternion.Euler(0f, -90f, 0f), Vector3.one * 0.65f);
+            foreach (MeshFilter filter in original)
             {
                 int start = vertices.Count;
                 foreach (Vector3 vertex in filter.sharedMesh.vertices)
-                    vertices.Add(model.InverseTransformPoint(filter.transform.TransformPoint(vertex)));
+                    vertices.Add(alignment.MultiplyPoint3x4(source.transform.InverseTransformPoint(
+                        filter.transform.TransformPoint(vertex))));
                 foreach (int index in filter.sharedMesh.triangles)
                     triangles.Add(start + index);
             }
