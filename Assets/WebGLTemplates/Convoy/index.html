@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#2e222f">
   <link rel="icon" href="data:,">
-  <title>Convoy | Survive Together</title>
+  <title>All Roads Lead To Gnome | Survive Together</title>
   <style>
     :root { color-scheme: dark; background: #2e222f; color: #f2ec8b; }
     * { box-sizing: border-box; }
@@ -31,15 +31,15 @@
 <body>
   <main id="frame">
     <div id="game">
-      <canvas id="unity-canvas" width="1280" height="720" tabindex="0" aria-label="Convoy cooperative survival game"></canvas>
-      <div id="loading" role="status" aria-label="Loading Convoy">
+      <canvas id="unity-canvas" width="1280" height="720" tabindex="0" aria-label="All Roads Lead To Gnome cooperative survival game"></canvas>
+      <div id="loading" role="status" aria-label="Loading All Roads Lead To Gnome">
         <canvas id="load-art" width="340" height="150"></canvas>
         <span class="sr-only" id="progress-text">Loading game</span>
       </div>
       <div id="error" role="alert"></div>
     </div>
     <footer>
-      <canvas id="brand" width="160" height="16" aria-label="Convoy: survive together"></canvas>
+      <canvas id="brand" width="160" height="16" aria-label="All Roads Lead To Gnome: survive together"></canvas>
       <button id="fullscreen" type="button" aria-label="Toggle fullscreen"><canvas id="full-art" width="80" height="12"></canvas></button>
     </footer>
   </main>
@@ -69,20 +69,21 @@
       art.fillStyle = "#2e222f"; art.fillRect(0, 0, 340, 150);
       art.fillStyle = "#cd683d"; art.fillRect(2, 2, 336, 146);
       art.fillStyle = "#2e222f"; art.fillRect(4, 4, 332, 142);
-      text(art, "CONVOY", 64, 22, 6, "#fbb954");
+      text(art, "ALL ROADS", 62, 22, 4, "#fbb954");
+      text(art, "LEAD TO GNOME", 18, 62, 4, "#f2ec8b");
       art.fillStyle = "#45293f"; art.fillRect(24, 114, 292, 12);
       art.fillStyle = "#fbb954"; art.fillRect(24, 114, Math.floor(292 * progress / 4) * 4, 12);
       text(art, "LOADING " + Math.floor(progress * 100) + "%", 112, 133, 1, "#cd683d");
       document.getElementById("progress-text").textContent = "Loading game " + Math.floor(progress * 100) + "%";
     }
-    text(document.getElementById("brand").getContext("2d"), "CONVOY", 0, 4, 1, "#fbb954");
+    text(document.getElementById("brand").getContext("2d"), "ALL ROADS LEAD TO GNOME", 0, 4, 1, "#fbb954");
     text(document.getElementById("full-art").getContext("2d"), "FULLSCREEN", 10, 2, 1, "#f2ec8b");
     loading(0);
     function showError(message, type) {
       if (type !== "error") { console.warn(message); return; }
       const error = document.getElementById("error");
       error.style.display = "block";
-      error.textContent = "CONVOY COULD NOT CONTINUE\n\n" + message + "\n\nRefresh this page to retry.";
+      error.textContent = "ALL ROADS LEAD TO GNOME COULD NOT CONTINUE\n\n" + message + "\n\nRefresh this page to retry.";
     }
     const config = {
       dataUrl: "Build/{{{ DATA_FILENAME }}}",

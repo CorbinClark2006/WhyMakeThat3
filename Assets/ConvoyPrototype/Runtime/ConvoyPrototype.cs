@@ -8,6 +8,7 @@ namespace Convoy
     [DefaultExecutionOrder(-30)]
     public sealed class ConvoyPrototype : MonoBehaviour
     {
+        public const string GameTitle = "All Roads Lead To Gnome";
         public enum PlayerRole { None, Gunner, Driver }
         public bool showRoleSelection = true;
         public PlayerRole Role { get; private set; }
@@ -122,6 +123,7 @@ namespace Convoy
         private float healthDisplayAge = 6f;
         private bool pausedForFocus;
         private bool showingCredits;
+        private Texture2D homeLogo;
         private AudioSource audioSource, engineAudio, windAudio, musicAudio;
         private SpriteRenderer chargeDigits;
         private Sprite chargeSprite;
@@ -156,6 +158,13 @@ namespace Convoy
                 return;
             }
             sounds.AssignTo(this);
+            homeLogo = Resources.Load<Texture2D>("GnomeLogo");
+            if (homeLogo == null)
+            {
+                Debug.LogError("Missing game logo. Run Tools > Convoy > Apply Gnome Branding And Secure Cargo.", this);
+                enabled = false;
+                return;
+            }
             musicSound = Resources.Load<AudioClip>("BeepBeep");
             if (engineSound == null || windSound == null || fireSound == null || impactSound == null ||
                 pickupSound == null || loadSound == null || musicSound == null)
@@ -174,6 +183,7 @@ namespace Convoy
             PrototypeGeometry.BuildAccelerator(this);
             PrototypeGeometry.BuildRoadRocks(this);
             PrototypeGeometry.ExtendRoad(this);
+            PrototypeGeometry.SecureAuthoredCargo(this);
             ConvoyNight.Apply(this);
             EnsureRoadAndRepairs();
             player.view.farClipPlane = ViewDistance;
@@ -747,8 +757,9 @@ namespace Convoy
                     GUI.matrix = previous;
                     return;
                 }
-                UI.Center("CONVOY", new Rect(160, 130, 960, 64), 7, ConvoyPixelUI.Gold);
-                UI.Center("SOLO", new Rect(160, 218, 960, 40), 2, ConvoyPixelUI.Copper);
+                GUI.color = Color.white;
+                GUI.DrawTexture(new Rect(496, 32, 288, 192), homeLogo, ScaleMode.ScaleToFit, true);
+                UI.Center("SOLO", new Rect(160, 236, 960, 32), 2, ConvoyPixelUI.Copper);
                 ConvoyPixelUI.Panel(new Rect(248, 284, 368, 232));
                 ConvoyPixelUI.Panel(new Rect(664, 284, 368, 232));
                 UI.VanBadge(384, 310, true);

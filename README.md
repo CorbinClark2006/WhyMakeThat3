@@ -1,4 +1,4 @@
-# WhyMakeThat3
+# All Roads Lead To Gnome
 
 A Unity project built collaboratively through GitHub.
 
@@ -22,7 +22,12 @@ git lfs pull
 
 In Unity Hub, choose **Add project from disk** and select the cloned folder. Open it with the editor version above and allow Unity to import assets and restore packages. Open [ConvoyPrototype](Assets/Scenes/ConvoyPrototype.unity) and press **Play** to try the game.
 
-## Playable prototype: DUST // REARGUARD
+## Playable prototype: All Roads Lead To Gnome
+
+The home screen displays the supplied
+[logo](Assets/Game%20Assets/all_road_s_lead_to_gnome.png) at its original aspect
+ratio with point-filtered, uncompressed pixels. Browser title, loading screen,
+footer, accessibility labels and Unity product name use **All Roads Lead To Gnome**.
 
 The home screen's **Credits** button opens **The Crew**, a palette-matched
 pixel panel crediting Corbin Clark (lead development/technology), Nick Rosen
@@ -356,6 +361,18 @@ Their model, hitbox, armor indicator and two-hit destruction are unchanged;
 non-colliding emissive headlamps make approaching vans readable at night.
 Cargo boxes, stools, railgun, lights, batteries, loading socket, driver station,
 accelerator and fire-repair positions remain separate gameplay assets.
+
+The twelve authored cardboard boxes and four interior decorations are grouped
+under **Secured authored cargo**, a child of the van's suspension rig. They
+keep their authored world placement when attached, then move and rock with the
+van in solo and cloned co-op worlds instead of staying behind as scene roots.
+Moving cargo is not marked static; decorative rigidbodies are kinematic,
+gravity-free and constrained. Batteries and the pedal rock are deliberately
+excluded so their pickup, drop and repair mechanics remain unchanged. Cargo
+collision and the original main-van collision geometry are preserved.
+**Tools > Convoy > Apply Gnome Branding And Secure Cargo** installs the supplied
+logo, updates the product name and reattaches the known authored cargo prefab
+roots without refitting their layout.
 
 ### Palette night atmosphere
 

@@ -26,7 +26,7 @@ public static class PrototypeSceneBuilder
         Directory.CreateDirectory(MaterialFolder);
         AssetDatabase.Refresh();
         Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-        ConvoyPrototype game = new GameObject("DUST - Rearguard Prototype").AddComponent<ConvoyPrototype>();
+        ConvoyPrototype game = new GameObject(ConvoyPrototype.GameTitle).AddComponent<ConvoyPrototype>();
         game.metal = Material("Van steel", Color.gray);
         game.dark = Material("Charcoal", new Color(0.19f, 0.19f, 0.19f));
         game.dirt = Material("Dust road", new Color(0.42f, 0.42f, 0.42f));

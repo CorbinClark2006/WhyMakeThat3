@@ -24,6 +24,18 @@ namespace Convoy
             return part;
         }
 
+        public static void SecureAuthoredCargo(ConvoyPrototype game)
+        {
+            Transform cargo = game.van.Find("Secured authored cargo");
+            if (cargo == null) return;
+            foreach (Rigidbody body in cargo.GetComponentsInChildren<Rigidbody>(true))
+            {
+                body.isKinematic = true;
+                body.useGravity = false;
+                body.constraints = RigidbodyConstraints.FreezeAll;
+            }
+        }
+
         private static Transform Group(string name, Transform parent, Vector3 position)
         {
             Transform group = new GameObject(name).transform;

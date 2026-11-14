@@ -48,6 +48,64 @@ public sealed class ConvoyMechanicsTests
     }
 
     [Test]
+    public void BrandingUsesSuppliedPixelLogoAndAuthoredCargoHasNoUnattachedRoots()
+    {
+        Assert.That(ConvoyPrototype.GameTitle, Is.EqualTo("All Roads Lead To Gnome"));
+        Texture2D logo = Resources.Load<Texture2D>("GnomeLogo");
+        Assert.That(logo, Is.Not.Null);
+        Assert.That(logo.width, Is.EqualTo(96));
+        Assert.That(logo.height, Is.EqualTo(64));
+        Assert.That(logo.filterMode, Is.EqualTo(FilterMode.Point));
+        Assert.That(logo.mipmapCount, Is.EqualTo(1));
+        var scene = UnityEditor.SceneManagement.EditorSceneManager.OpenScene(
+            "Assets/Scenes/ConvoyPrototype.unity", UnityEditor.SceneManagement.OpenSceneMode.Additive);
+        try
+        {
+            ConvoyPrototype authored = null;
+            foreach (GameObject item in scene.GetRootGameObjects())
+            {
+                if (item.TryGetComponent(out ConvoyPrototype owner)) authored = owner;
+                string source = UnityEditor.PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(item);
+                Assert.That(source, Is.Not.EqualTo("Assets/Game Assets/in_van_assets/CardboardBox1.fbx"));
+                Assert.That(source, Is.Not.EqualTo("Assets/Game Assets/in_van_assets/GnomeKiller.fbx"));
+                Assert.That(source, Is.Not.EqualTo("Assets/Game Assets/in_van_assets/trashbag_v001.fbx"));
+                Assert.That(source, Is.Not.EqualTo("Assets/Game Assets/in_van_assets/beartrap_v001.fbx"));
+            }
+            Assert.That(authored, Is.Not.Null);
+            Transform cargo = authored.van.Find("Secured authored cargo");
+            Assert.That(cargo, Is.Not.Null);
+            Assert.That(cargo.childCount, Is.EqualTo(16), "Keep all twelve boxes and four authored decorations.");
+            foreach (Transform prop in cargo)
+            {
+                Assert.That(prop.IsChildOf(authored.van), Is.True);
+                foreach (Transform child in prop.GetComponentsInChildren<Transform>(true))
+                    Assert.That(UnityEditor.GameObjectUtility.GetStaticEditorFlags(child.gameObject),
+                        Is.EqualTo((UnityEditor.StaticEditorFlags)0),
+                        "Van-mounted decorations must not be statically batched into world space.");
+            }
+        }
+        finally { UnityEditor.SceneManagement.EditorSceneManager.CloseScene(scene, true); }
+    }
+
+    [Test]
+    public void SecuringDecorativeCargoLocksPhysicsWithoutTouchingCarryableBattery()
+    {
+        var cargo = new GameObject("Secured authored cargo");
+        cargo.transform.SetParent(game.van, false);
+        var prop = new GameObject("Future authored cargo with physics");
+        prop.transform.SetParent(cargo.transform, false);
+        Rigidbody body = prop.AddComponent<Rigidbody>();
+        Vector3 position = prop.transform.localPosition = new Vector3(0.4f, 0.6f, -1f);
+        PrototypeGeometry.SecureAuthoredCargo(game);
+        Assert.That(body.isKinematic, Is.True);
+        Assert.That(body.useGravity, Is.False);
+        Assert.That(body.constraints, Is.EqualTo(RigidbodyConstraints.FreezeAll));
+        Assert.That(prop.transform.localPosition, Is.EqualTo(position));
+        Assert.That(game.supplyPack.GetComponent<Rigidbody>().constraints, Is.EqualTo(RigidbodyConstraints.None),
+            "Battery pickup/drop physics remain independent from fixed decorations.");
+    }
+
+    [Test]
     public void EscapePushesRammingEnemiesBackThenRestoresChaseWithoutLosingSpacing()
     {
         PursuerVan leader = game.SpawnPursuer(-1, -20f);

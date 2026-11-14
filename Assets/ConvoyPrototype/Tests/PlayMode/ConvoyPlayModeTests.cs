@@ -452,6 +452,51 @@ public sealed class ConvoyPlayModeTests
     }
 
     [UnityTest]
+    public IEnumerator AuthoredCargoStaysLockedToVanAcrossSteeringRamsAndPhysicsFrames()
+    {
+        Object.Destroy(game.gameObject);
+        yield return SceneManager.LoadSceneAsync("ConvoyPrototype");
+        yield return null;
+        game = Object.FindAnyObjectByType<ConvoyPrototype>();
+        game.SelectRole(ConvoyPrototype.PlayerRole.Driver);
+        game.SetPaused(false);
+        Assert.That(game.player.MountDriver(), Is.True);
+        InputState.Change(mouse, new MouseState().WithButton(MouseButton.Right));
+        Transform cargo = game.van.Find("Secured authored cargo");
+        Assert.That(cargo, Is.Not.Null);
+        var props = new System.Collections.Generic.List<Transform>();
+        var relative = new System.Collections.Generic.List<Matrix4x4>();
+        foreach (Transform prop in cargo)
+        {
+            props.Add(prop);
+            relative.Add(game.van.worldToLocalMatrix * prop.localToWorldMatrix);
+        }
+        Assert.That(props.Count, Is.EqualTo(16));
+        float maximumSteering = 0f;
+        for (int cycle = 0; cycle < 4; cycle++)
+        {
+            game.RegisterRam(cycle % 2 == 0 ? 1 : -1);
+            game.accelerator.ResetForRound();
+            for (int frame = 0; frame < 12; frame++)
+            {
+                game.Steer(cycle % 2 == 0 ? 1f : -1f, 1f / 30f);
+                maximumSteering = Mathf.Max(maximumSteering, Mathf.Abs(game.SteeringOffset));
+                yield return new WaitForFixedUpdate();
+                for (int index = 0; index < props.Count; index++)
+                {
+                    Assert.That(props[index].IsChildOf(game.van), Is.True);
+                    Matrix4x4 actual = game.van.worldToLocalMatrix * props[index].localToWorldMatrix;
+                    for (int element = 0; element < 16; element++)
+                        Assert.That(actual[element], Is.EqualTo(relative[index][element]).Within(0.0001f),
+                            "Cargo cannot drift, rotate or scale independently of the van: " + props[index].name);
+                }
+            }
+        }
+        Assert.That(maximumSteering, Is.GreaterThan(4f), "The test must actually steer across a lane.");
+        Assert.That(game.Health, Is.EqualTo(1));
+    }
+
+    [UnityTest]
     public IEnumerator MusicLoopsFromHomeThroughRolePauseAndWrapWithoutDuplicateSources()
     {
         Object.Destroy(game.gameObject);
